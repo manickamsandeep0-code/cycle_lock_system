@@ -5,11 +5,27 @@ import { db } from '../config/firebase';
 /**
  * Payment Service for Razorpay Integration
  * Handles payment collection, escrow, and refunds
+ * 
+ * DEVELOPMENT SETUP (No Play Store needed):
+ * 1. Sign up at https://razorpay.com/
+ * 2. Use TEST MODE (toggle in dashboard top-right)
+ * 3. Go to Settings → API Keys → Generate Test Key
+ * 4. Copy "Key ID" (starts with rzp_test_) and paste below
+ * 5. Test with card: 4111 1111 1111 1111, CVV: 123, Any future date
+ * 
+ * PRODUCTION SETUP (After Play Store):
+ * 1. Switch to LIVE MODE in Razorpay dashboard
+ * 2. Complete KYC verification
+ * 3. Generate Live Key (starts with rzp_live_)
+ * 4. Move keys to environment variables
  */
 
-// Razorpay Configuration
-const RAZORPAY_KEY_ID = 'rzp_test_YOUR_KEY_ID'; // Replace with your Razorpay Key ID
-const RAZORPAY_KEY_SECRET = 'YOUR_SECRET_KEY'; // Store this securely on backend
+// Razorpay Configuration - TEST MODE (Development)
+const RAZORPAY_KEY_ID = 'rzp_test_YOUR_KEY_ID'; // Replace with your TEST key
+const RAZORPAY_KEY_SECRET = 'YOUR_SECRET_KEY'; // Never expose this - backend only
+
+// For development without backend, we'll skip signature verification
+// In production, MUST verify on backend before confirming payment
 
 /**
  * Create a payment order
