@@ -4,10 +4,10 @@ module.exports = {
     slug: 'cycle-rental-app',
     version: '1.0.0',
     orientation: 'portrait',
-    icon: './assets/icon.svg',
+    icon: './assets/icon.png',
     userInterfaceStyle: 'light',
     splash: {
-      image: './assets/splash.svg',
+      image: './assets/splash.png',
       resizeMode: 'contain',
       backgroundColor: '#ffffff'
     },
@@ -20,7 +20,7 @@ module.exports = {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: './assets/adaptive-icon.svg',
+        foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#ffffff'
       },
       package: 'com.karunya.cyclerental',
@@ -31,7 +31,7 @@ module.exports = {
       versionCode: 1
     },
     web: {
-      favicon: './assets/favicon.svg'
+      favicon: './assets/favicon.png'
     },
     scheme: 'cyclerental',
     plugins: [
