@@ -205,9 +205,17 @@ export default function OwnerDashboard() {
           <Text style={styles.headerTitle}>Owner Dashboard</Text>
           <Text style={styles.headerSubtitle}>Welcome, {user?.name}</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            onPress={() => router.push('/owner/rental-history')} 
+            style={styles.historyButton}
+          >
+            <Text style={styles.historyButtonText}>📋 History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -296,6 +304,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#bfdbfe',
     marginTop: 4,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  historyButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  historyButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 12,
   },
   logoutButton: {
     backgroundColor: '#3b82f6',

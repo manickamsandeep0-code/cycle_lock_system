@@ -33,6 +33,13 @@ export default function Layout() {
           }} 
         />
         <Stack.Screen 
+          name="my-rental" 
+          options={{ 
+            title: 'My Rental',
+            presentation: 'modal'
+          }} 
+        />
+        <Stack.Screen 
           name="owner/dashboard" 
           options={{ headerShown: false }} 
         />
@@ -54,6 +61,13 @@ export default function Layout() {
           name="owner/cycle-map" 
           options={{ 
             title: 'Cycle Location',
+            headerShown: false
+          }} 
+        />
+        <Stack.Screen 
+          name="owner/rental-history" 
+          options={{ 
+            title: 'Rental History',
             headerShown: false
           }} 
         />

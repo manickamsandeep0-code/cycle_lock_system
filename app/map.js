@@ -142,9 +142,14 @@ export default function Map() {
           <Text style={styles.headerTitle}>Karunya Cycle Rental</Text>
           <Text style={styles.headerSubtitle}>Nearby cycles on campus</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity onPress={() => router.push('/my-rental')} style={styles.rentalButton}>
+            <Text style={styles.rentalButtonText}>🚴</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <WebView
@@ -201,7 +206,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
   },
-  headerSubtitle: {
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  rentalButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  rentalButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  logoutButton: {
     fontSize: 14,
     color: '#bfdbfe',
     marginTop: 2,
