@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
+import { lockCycle } from '../services/lockService';
+import { capturePayment } from '../services/paymentService';
 
 export default function MyRental() {
   const router = useRouter();
@@ -63,10 +65,38 @@ export default function MyRental() {
     try {
       const user = await getUserData();
       
-      // Create rental history record
+      // Step 1: Lock the cycle
+      const lockResult = await lockCycle(rental.lockId, user.id);
+      if (!lockResult.success) {
+        Alert.alert(
+          'Warning',
+          'Failed to lock the cycle. Please ensure the cycle is locked manually before leaving.',
+          [{ text: 'Continue Anyway', onPress: async () => await completeRentalProcess(user) }]
+        );
+        setCompleting(false);
+        return;
+      }
+
+      await completeRentalProcess(user);
+    } catch (error) {
+      console.error('Error completing ride:', error);
+      Alert.alert('Error', 'Failed to complete ride. Please try again.');
+      setCompleting(false);
+    }
+  };
+
+  const completeRentalProcess = async (user) => {
+    try {
+      // Step 2: Capture payment (convert hold to actual charge)
+      if (rental.transactionId) {
+        await capturePayment(rental.transactionId);
+      }
+
+      // Step 3: Create rental history record
       await addDoc(collection(db, 'rentalHistory'), {
         cycleId: rental.id,
         cycleName: rental.cycleName,
+        lockId: rental.lockId,
         ownerId: rental.ownerId,
         ownerName: rental.ownerName,
         renterId: user.id,
@@ -78,9 +108,10 @@ export default function MyRental() {
         price: rental.rentalPrice,
         rating: rating,
         review: review,
+        transactionId: rental.transactionId,
       });
 
-      // Update cycle status
+      // Step 4: Update cycle status
       const cycleRef = doc(db, 'cycles', rental.id);
       await updateDoc(cycleRef, {
         status: CYCLE_STATUS.NOT_AVAILABLE,
@@ -92,16 +123,17 @@ export default function MyRental() {
         rentalDuration: null,
         rentalPrice: null,
         rentalEndTime: null,
+        transactionId: null,
       });
 
       Alert.alert(
         'Thank You!',
-        'Ride completed successfully. Thank you for your review!',
+        'Cycle locked and payment processed. Thank you for your review!',
         [{ text: 'OK', onPress: () => router.replace('/map') }]
       );
     } catch (error) {
-      console.error('Error completing ride:', error);
-      Alert.alert('Error', 'Failed to complete ride. Please try again.');
+      console.error('Error in rental completion:', error);
+      Alert.alert('Error', 'Failed to complete ride process. Please try again.');
     } finally {
       setCompleting(false);
     }

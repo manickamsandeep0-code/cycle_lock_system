@@ -24,4 +24,6 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const realtimeDb = getDatabase(app);
 
+// Export app instance for reCAPTCHA and other services
+export { app };
 export default app;
