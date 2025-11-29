@@ -120,12 +120,12 @@ export default function Map() {
     cycles.forEach(cycle => {
       const isAvailable = cycle.status === '${CYCLE_STATUS.AVAILABLE}';
       const marker = L.marker([cycle.location.latitude, cycle.location.longitude], {
-        icon: L.divIcon({ className: 'custom-div-icon', html: `<div class="custom-marker">${isAvailable ? '🚲' : '🔒'}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] })
+        icon: L.divIcon({ className: 'custom-div-icon', html: '<div class="custom-marker">' + (isAvailable ? '🚲' : '🔒') + '</div>', iconSize: [40, 40], iconAnchor: [20, 20] })
       }).addTo(map);
       marker.on('click', () => {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'markerClick', cycle }));
       });
-      marker.bindPopup(`<b>${cycle.cycleName || 'Cycle'}</b><br/>Owner: ${cycle.ownerName || 'Unknown'}<br/>Status: ${isAvailable ? 'Available' : 'Rented'}`);
+      marker.bindPopup('<b>' + (cycle.cycleName || 'Cycle') + '</b><br/>Owner: ' + (cycle.ownerName || 'Unknown') + '<br/>Status: ' + (isAvailable ? 'Available' : 'Rented'));
     });
   </script>
 </body>
