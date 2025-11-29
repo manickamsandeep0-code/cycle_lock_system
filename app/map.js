@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserData, getUserRole, clearUserData } from '../utils/storage';
 import { KARUNYA_LOCATION, USER_ROLES, CYCLE_STATUS, LOCK_STATUS } from '../constants';
@@ -25,26 +25,20 @@ export default function Map() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-
-    // Listen to cycles collection for real-time updates
+    // subscribe to cycles
     const cyclesRef = collection(db, 'cycles');
-    const q = query(
-      cyclesRef,
-      where('status', 'in', [CYCLE_STATUS.AVAILABLE, CYCLE_STATUS.RENTED])
-    );
-
+    const q = query(cyclesRef, where('status', 'in', [CYCLE_STATUS.AVAILABLE, CYCLE_STATUS.RENTED]));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const cyclesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const cyclesData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setCycles(cyclesData);
       setLoading(false);
-    }, (error) => {
-      console.error('Error fetching cycles:', error);
+    }, (err) => {
+      console.error('Error fetching cycles:', err);
       setLoading(false);
     });
+
+    return () => unsubscribe();
+  }, []);
 
   const loadUserData = async () => {
     const userData = await getUserData();
@@ -58,10 +52,7 @@ export default function Map() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         const location = await Location.getCurrentPositionAsync({});
-        setUserLocation({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        setUserLocation({ latitude: location.coords.latitude, longitude: location.coords.longitude });
       }
     } catch (error) {
       console.error('Error getting location:', error);
@@ -69,131 +60,72 @@ export default function Map() {
   };
 
   const handleLogout = async () => {
-  };
-
-  const handleLogout = async () => {
-    Alert.alert(
-  const handleRentCycle = async () => {
-        }
-      ]
-    );
-  };
-
-  const handleMarkerPress = (cycle) => {
-    // Only allow renters to view cycle details
-    if (userRole === USER_ROLES.RENTER && cycle.status === CYCLE_STATUS.AVAILABLE) {
-      setSelectedCycle(cycle);
-    } else if (cycle.status === CYCLE_STATUS.RENTED) {
-      Alert.alert('Unavailable', 'This cycle is currently rented.');
-    }
+    await clearUserData();
+    router.push('/login');
   };
 
   const handleRentCycle = async () => {
-    if (!selectedCycle) return;
-
+    if (!selectedCycle || !user) return;
     try {
       const cycleRef = doc(db, 'cycles', selectedCycle.id);
-      
-      // Update cycle status
       await updateDoc(cycleRef, {
         status: CYCLE_STATUS.RENTED,
         lockStatus: LOCK_STATUS.UNLOCK_REQUESTED,
         rentedBy: user.id,
         rentedAt: new Date().toISOString(),
       });
-
-      Alert.alert(
-        'Success',
-        'Cycle unlocked! The lock will open shortly. Please pick up the cycle.',
-        [{ text: 'OK', onPress: () => setSelectedCycle(null) }]
-      );
+      Alert.alert('Success', 'Cycle unlocked! Please pick it up.', [{ text: 'OK', onPress: () => setSelectedCycle(null) }]);
     } catch (error) {
       console.error('Error renting cycle:', error);
-      Alert.alert('Error', 'Failed to rent cycle. Please try again.');
+      Alert.alert('Error', 'Failed to rent cycle.');
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1e40af" />
-        <Text style={styles.loadingText}>Loading map...</Text>
-      </View>
+  const handleWebViewMessage = (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'markerClick') setSelectedCycle(data.cycle);
+    } catch (error) {
+      console.error('Error parsing message:', error);
     }
   };
 
-  // Generate HTML for Leaflet map
   const generateMapHTML = () => {
-    const cyclesJSON = JSON.stringify(cycles);
-    const userLocationJSON = JSON.stringify(userLocation);
-    
+    const cyclesJSON = JSON.stringify(cycles || []);
+    const userLocationJSON = JSON.stringify(userLocation || null);
     return `
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-      </View>
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    .custom-marker { font-size: 24px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    const cycles = ${cyclesJSON};
+    const userLocation = ${userLocationJSON};
+    const map = L.map('map').setView([${KARUNYA_LOCATION.latitude}, ${KARUNYA_LOCATION.longitude}], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-      {/* Map */}
-      <WebView
-        ref={webViewRef}
-        style={styles.map}
-        originWhitelist={['*']}
-        source={{ html: generateMapHTML() }}
-        onMessage={handleWebViewMessage}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-      />
-
-      {/* Owner Actions Button */} available
     if (userLocation) {
-      L.circleMarker([userLocation.latitude, userLocation.longitude], {
-        radius: 8,
-        fillColor: '#3b82f6',
-        color: '#ffffff',
-        weight: 2,
-        fillOpacity: 0.8
-      }).addTo(map).bindPopup('You are here');
+      L.circleMarker([userLocation.latitude, userLocation.longitude], { radius: 8, fillColor: '#3b82f6', color: '#fff', weight: 2, fillOpacity: 0.8 }).addTo(map).bindPopup('You are here');
     }
 
-    // Add cycle markers
-    cycles.forEach((cycle, index) => {
-      const lat = cycle.location.latitude;
-      const lng = cycle.location.longitude;
-      const isAvailable = cycle.status === 'available';
-      
-      const markerIcon = L.divIcon({
-        className: 'custom-div-icon',
-        html: \`<div class="custom-marker \${isAvailable ? 'marker-available' : 'marker-rented'}">🚲</div>\`,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
+    cycles.forEach(cycle => {
+      const isAvailable = cycle.status === '${CYCLE_STATUS.AVAILABLE}';
+      const marker = L.marker([cycle.location.latitude, cycle.location.longitude], {
+        icon: L.divIcon({ className: 'custom-div-icon', html: `<div class="custom-marker">${isAvailable ? '🚲' : '🔒'}</div>`, iconSize: [40, 40], iconAnchor: [20, 20] })
+      }).addTo(map);
+      marker.on('click', () => {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'markerClick', cycle }));
       });
-
-      const marker = L.marker([lat, lng], { icon: markerIcon }).addTo(map);
-      
-      marker.on('click', function() {
-        if (isRenter && isAvailable) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'markerClick',
-            cycle: cycle
-          }));
-        } else if (!isAvailable) {
-          alert('This cycle is currently rented');
-        }
-      });
-
-      marker.bindPopup(\`
-        <div style="min-width: 150px;">
-          <b>\${cycle.cycleName}</b><br/>
-          Owner: \${cycle.ownerName}<br/>
-          Status: <span style="color: \${isAvailable ? '#10b981' : '#ef4444'}">
-            \${isAvailable ? 'Available' : 'Rented'}
-          </span>
-        </div>
-      \`);
+      marker.bindPopup(`<b>${cycle.cycleName || 'Cycle'}</b><br/>Owner: ${cycle.ownerName || 'Unknown'}<br/>Status: ${isAvailable ? 'Available' : 'Rented'}`);
     });
   </script>
 </body>
@@ -210,49 +142,32 @@ export default function Map() {
     );
   }
 
-  const handleWebViewMessage = (event) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'markerClick') {
-        setSelectedCycle(data.cycle);
-      }
-    } catch (error) {
-      console.error('Error parsing message:', error);
-    }
-  };
-
-  return (View>
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Karunya Cycle Rental</Text>
+          <Text style={styles.headerSubtitle}>Nearby cycles on campus</Text>
+        </View>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Map */}
-      <MapView
+      <WebView
+        ref={webViewRef}
         style={styles.map}
-        initialRegion={KARUNYA_LOCATION}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-      >
-        {cycles.map((cycle) => (
-          <Marker
-            key={cycle.id}
-            coordinate={{
-              latitude: cycle.location.latitude,
-              longitude: cycle.location.longitude,
-  map: {
-    flex: 1,
-  },
-  fab: {
+        originWhitelist={['*']}
+        source={{ html: generateMapHTML() }}
+        onMessage={handleWebViewMessage}
+        javaScriptEnabled
+        domStorageEnabled
+      />
 
-      {/* Info Banner */}
       <View style={styles.infoBanner}>
-        <Text style={styles.infoText}>
-          {cycles.length} cycle(s) available on campus
-        </Text>
+        <Text style={styles.infoText}>{cycles.length} cycle(s) available on campus</Text>
       </View>
 
-      {/* Cycle Details Modal */}
       {selectedCycle && (
         <CycleDetailsModal
           visible={!!selectedCycle}
