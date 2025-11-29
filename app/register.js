@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { saveUserData, saveUserRole } from '../utils/storage';
 import { USER_ROLES } from '../constants';
@@ -13,6 +13,8 @@ export default function Register() {
     registerNo: '',
     phoneNumber: '',
     role: '',
+    lockCode: '', // For owners only
+    cycleName: '', // For owners only
   });
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +23,7 @@ export default function Register() {
   };
 
   const handleRegister = async () => {
-    const { name, registerNo, phoneNumber, role } = formData;
+    const { name, registerNo, phoneNumber, role, lockCode, cycleName } = formData;
 
     // Validation
     if (!name.trim()) {
@@ -40,11 +42,45 @@ export default function Register() {
       Alert.alert('Error', 'Please select your role');
       return;
     }
+    // Additional validation for owners
+    if (role === USER_ROLES.OWNER) {
+      if (!lockCode.trim()) {
+        Alert.alert('Error', 'Please enter your Lock Code');
+        return;
+      }
+      if (!cycleName.trim()) {
+        Alert.alert('Error', 'Please enter a name for your cycle');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
-      // Check if phone number already exists
       const usersRef = collection(db, 'users');
+      
+      // For owners, check if lock code exists and is not already registered
+      if (role === USER_ROLES.OWNER) {
+        const cyclesRef = collection(db, 'cycles');
+        const lockQuery = query(cyclesRef, where('lockCode', '==', lockCode));
+        const lockSnapshot = await getDocs(lockQuery);
+
+        if (!lockSnapshot.empty) {
+          const cycleDoc = lockSnapshot.docs[0];
+          const cycleData = cycleDoc.data();
+          
+          if (cycleData.ownerId) {
+            Alert.alert('Error', 'This Lock Code is already registered to another owner.');
+            setLoading(false);
+            return;
+          }
+        } else {
+          Alert.alert('Error', 'Invalid Lock Code. Please check and try again.');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Check if phone number already exists
       const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
       const querySnapshot = await getDocs(q);
 
@@ -69,6 +105,27 @@ export default function Register() {
       // Save to local storage
       await saveUserData(newUser);
       await saveUserRole(role);
+
+      // For owners, update the cycle document with owner info
+      if (role === USER_ROLES.OWNER) {
+        const cyclesRef = collection(db, 'cycles');
+        const lockQuery = query(cyclesRef, where('lockCode', '==', lockCode));
+        const lockSnapshot = await getDocs(lockQuery);
+        
+        if (!lockSnapshot.empty) {
+          const cycleDoc = lockSnapshot.docs[0];
+          const cycleRef = doc(db, 'cycles', cycleDoc.id);
+          
+          await updateDoc(cycleRef, {
+            ownerId: newUser.id,
+            ownerName: name,
+            ownerPhone: phoneNumber,
+            cycleName: cycleName,
+            status: 'available',
+            registeredAt: new Date().toISOString(),
+          });
+        }
+      }
 
       Alert.alert('Success', 'Registration successful!', [
         { 
@@ -163,6 +220,38 @@ export default function Register() {
           </View>
         </View>
 
+        {/* Show Lock Code and Cycle Name fields only for Owners */}
+        {formData.role === USER_ROLES.OWNER && (
+          <>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Lock Code</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter the code from your lock device"
+                value={formData.lockCode}
+                onChangeText={(value) => handleInputChange('lockCode', value)}
+                autoCapitalize="characters"
+              />
+              <Text style={styles.hint}>
+                This code was provided when you purchased the lock
+              </Text>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Cycle Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., My Red Cycle"
+                value={formData.cycleName}
+                onChangeText={(value) => handleInputChange('cycleName', value)}
+              />
+              <Text style={styles.hint}>
+                Give your cycle a friendly name
+              </Text>
+            </View>
+          </>
+        )}
+
         <TouchableOpacity 
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleRegister}
@@ -222,6 +311,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+  },
+  hint: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   roleContainer: {
     flexDirection: 'row',

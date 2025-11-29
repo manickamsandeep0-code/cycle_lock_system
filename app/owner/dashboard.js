@@ -116,11 +116,33 @@ export default function OwnerDashboard() {
           <Text style={styles.infoValue}>{cycle.lockCode}</Text>
         </View>
 
+        <View style={styles.cycleInfo}>
+          <Text style={styles.infoLabel}>Location:</Text>
+          <Text style={styles.infoValue}>
+            {cycle.location ? 
+              `${cycle.location.latitude.toFixed(4)}, ${cycle.location.longitude.toFixed(4)}` 
+              : 'Unknown'}
+          </Text>
+        </View>
+
+        {cycle.isOnline ? (
+          <View style={styles.onlineBadge}>
+            <Text style={styles.onlineText}>🟢 Online</Text>
+          </View>
+        ) : (
+          <View style={styles.offlineBadge}>
+            <Text style={styles.offlineText}>🔴 Offline</Text>
+          </View>
+        )}
+
         {isRented && cycle.currentRenter && (
           <View style={styles.renterInfo}>
             <Text style={styles.renterLabel}>Currently Rented By:</Text>
             <Text style={styles.renterName}>{cycle.currentRenterName || 'Unknown'}</Text>
             <Text style={styles.renterPhone}>{cycle.currentRenterPhone || ''}</Text>
+            <Text style={styles.renterTime}>
+              Rented at: {cycle.rentedAt ? new Date(cycle.rentedAt).toLocaleString() : 'N/A'}
+            </Text>
           </View>
         )}
 
@@ -189,27 +211,15 @@ export default function OwnerDashboard() {
 
         {cycles.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No Cycles Registered</Text>
+            <Text style={styles.emptyTitle}>No Cycle Found</Text>
             <Text style={styles.emptyText}>
-              Register your cycle lock to start renting
+              Your cycle is not yet activated. Please ensure your lock device is online and connected.
             </Text>
-            <TouchableOpacity 
-              style={styles.registerButton}
-              onPress={() => router.push('/owner/register-lock')}
-            >
-              <Text style={styles.registerButtonText}>Register Cycle Lock</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <>
             <View style={styles.cyclesHeader}>
-              <Text style={styles.cyclesTitle}>My Cycles</Text>
-              <TouchableOpacity 
-                style={styles.addButton}
-                onPress={() => router.push('/owner/register-lock')}
-              >
-                <Text style={styles.addButtonText}>+ Add Cycle</Text>
-              </TouchableOpacity>
+              <Text style={styles.cyclesTitle}>My Cycle</Text>
             </View>
 
             {cycles.map(renderCycleCard)}
@@ -420,6 +430,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#92400e',
     marginTop: 2,
+  },
+  renterTime: {
+    fontSize: 12,
+    color: '#92400e',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  onlineBadge: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  onlineText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065f46',
+  },
+  offlineBadge: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  offlineText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#991b1b',
   },
   toggleButton: {
     backgroundColor: '#1e40af',
