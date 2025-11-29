@@ -29,9 +29,9 @@
         "ACCESS_COARSE_LOCATION"
       ],
       "versionCode": 1
+    },
     "web": {
       "favicon": "./assets/favicon.svg"
-    },"favicon": "./assets/favicon.png"
     },
     "scheme": "cyclerental",
     "plugins": [
