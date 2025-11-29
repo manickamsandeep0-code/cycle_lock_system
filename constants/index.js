@@ -25,4 +25,14 @@ export const CYCLE_STATUS = {
   RENTED: 'rented',
   NOT_AVAILABLE: 'not_available',
   OFFLINE: 'offline',
+  MAINTENANCE: 'maintenance', // For damage reports
+};
+
+// Notification types
+export const NOTIFICATION_TYPES = {
+  RENTAL_EXPIRING: 'rental_expiring',
+  RENTAL_EXPIRED: 'rental_expired',
+  GEOFENCE_VIOLATION: 'geofence_violation',
+  PAYMENT_SUCCESS: 'payment_success',
+  PAYMENT_FAILED: 'payment_failed',
 };

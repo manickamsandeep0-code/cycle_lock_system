@@ -1,7 +1,19 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
+import { startExpirationMonitoring, stopExpirationMonitoring } from '../services/expirationService';
 
 export default function Layout() {
+  useEffect(() => {
+    // Start monitoring for expired rentals when app loads
+    startExpirationMonitoring();
+    
+    return () => {
+      // Cleanup when app closes
+      stopExpirationMonitoring();
+    };
+  }, []);
+
   return (
     <>
       <StatusBar style="dark" />

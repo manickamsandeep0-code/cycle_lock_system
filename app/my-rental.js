@@ -7,6 +7,8 @@ import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
 import { lockCycle } from '../services/lockService';
 import { capturePayment } from '../services/paymentService';
+import { startLocationTracking, stopLocationTracking, getCurrentLocation } from '../services/locationService';
+import { isWithinCampus, getGeofenceWarning, distanceToBoundary, KARUNYA_CAMPUS_BOUNDARY, calculateOutOfBoundsPenalty } from '../services/geofenceService';
 
 export default function MyRental() {
   const router = useRouter();
@@ -16,9 +18,17 @@ export default function MyRental() {
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
+  const [geofenceWarning, setGeofenceWarning] = useState(null);
+  const [isOutsideCampus, setIsOutsideCampus] = useState(false);
+  const [rentalId, setRentalId] = useState(null);
 
   useEffect(() => {
     loadActiveRental();
+    
+    return () => {
+      // Cleanup location tracking when component unmounts
+      stopLocationTracking();
+    };
   }, []);
 
   const loadActiveRental = async () => {
@@ -35,7 +45,24 @@ export default function MyRental() {
 
       if (!querySnapshot.empty) {
         const cycleDoc = querySnapshot.docs[0];
-        setRental({ id: cycleDoc.id, ...cycleDoc.data() });
+        const rentalData = { id: cycleDoc.id, ...cycleDoc.data() };
+        setRental(rentalData);
+        
+        // Find active rental record
+        const activeRentalsRef = collection(db, 'activeRentals');
+        const rentalQuery = query(activeRentalsRef, where('cycleId', '==', cycleDoc.id), where('status', '==', 'active'));
+        const rentalSnapshot = await getDocs(rentalQuery);
+        
+        if (!rentalSnapshot.empty) {
+          const activeRentalId = rentalSnapshot.docs[0].id;
+          setRentalId(activeRentalId);
+          
+          // Start location tracking
+          await startLocationTracking(activeRentalId, cycleDoc.id, user.id);
+          
+          // Start geofence monitoring
+          startGeofenceMonitoring();
+        }
       }
     } catch (error) {
       console.error('Error loading rental:', error);
@@ -139,6 +166,33 @@ export default function MyRental() {
     }
   };
 
+  const startGeofenceMonitoring = () => {
+    // Check geofence every 30 seconds
+    const interval = setInterval(async () => {
+      const locationResult = await getCurrentLocation();
+      
+      if (locationResult.success) {
+        const location = locationResult.location;
+        const withinCampus = isWithinCampus(location);
+        const distance = distanceToBoundary(location, KARUNYA_CAMPUS_BOUNDARY);
+        const warning = getGeofenceWarning(distance);
+        
+        setIsOutsideCampus(!withinCampus);
+        setGeofenceWarning(warning);
+        
+        if (!withinCampus) {
+          Alert.alert(
+            '⚠️ Outside Campus Boundary!',
+            'You have taken the cycle outside campus. Please return immediately to avoid penalty charges.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    }, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -224,6 +278,12 @@ export default function MyRental() {
     <ScrollView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Active Rental</Text>
+        
+        {geofenceWarning && (
+          <View style={[styles.warningBanner, isOutsideCampus && styles.dangerBanner]}>
+            <Text style={styles.warningText}>{geofenceWarning}</Text>
+          </View>
+        )}
         
         <View style={styles.rentalCard}>
           <Text style={styles.cycleName}>{rental.cycleName}</Text>
@@ -398,6 +458,23 @@ const styles = StyleSheet.create({
   completeButtonText: {
     color: '#ffffff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  warningBanner: {
+    backgroundColor: '#fef3c7',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  dangerBanner: {
+    backgroundColor: '#fee2e2',
+    borderLeftColor: '#ef4444',
+  },
+  warningText: {
+    color: '#92400e',
+    fontSize: 14,
     fontWeight: '600',
   },
   button: {
