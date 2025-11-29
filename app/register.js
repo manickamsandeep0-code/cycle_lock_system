@@ -71,7 +71,16 @@ export default function Register() {
       await saveUserRole(role);
 
       Alert.alert('Success', 'Registration successful!', [
-        { text: 'OK', onPress: () => router.replace('/map') }
+        { 
+          text: 'OK', 
+          onPress: () => {
+            if (role === 'owner') {
+              router.replace('/owner/dashboard');
+            } else {
+              router.replace('/map');
+            }
+          }
+        }
       ]);
     } catch (error) {
       console.error('Registration error:', error);

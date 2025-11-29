@@ -37,8 +37,12 @@ export default function Login() {
       await saveUserData(userData);
       await saveUserRole(userData.role);
 
-      // Navigate to map
-      router.replace('/map');
+      // Navigate based on role
+      if (userData.role === 'owner') {
+        router.replace('/owner/dashboard');
+      } else {
+        router.replace('/map');
+      }
     } catch (error) {
       console.error('Login error:', error);
       Alert.alert('Error', 'Failed to login. Please try again.');

@@ -26,6 +26,10 @@ export default function Layout() {
           options={{ headerShown: false }} 
         />
         <Stack.Screen 
+          name="owner/dashboard" 
+          options={{ headerShown: false }} 
+        />
+        <Stack.Screen 
           name="owner/register-lock" 
           options={{ 
             title: 'Register Lock',

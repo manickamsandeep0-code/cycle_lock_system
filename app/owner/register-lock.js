@@ -8,13 +8,13 @@ import { CYCLE_STATUS, LOCK_STATUS, KARUNYA_LOCATION } from '../../constants';
 
 export default function RegisterLock() {
   const router = useRouter();
-  const [lockId, setLockId] = useState('');
+  const [lockCode, setLockCode] = useState('');
   const [cycleName, setCycleName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleRegisterLock = async () => {
-    if (!lockId.trim()) {
-      Alert.alert('Error', 'Please enter a Lock ID');
+    if (!lockCode.trim()) {
+      Alert.alert('Error', 'Please enter a Lock Code');
       return;
     }
     if (!cycleName.trim()) {
@@ -31,20 +31,20 @@ export default function RegisterLock() {
         return;
       }
 
-      // Check if lock ID already exists
+      // Check if lock code already exists
       const cyclesRef = collection(db, 'cycles');
-      const q = query(cyclesRef, where('lockId', '==', lockId));
+      const q = query(cyclesRef, where('lockCode', '==', lockCode));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        Alert.alert('Error', 'This Lock ID is already registered.');
+        Alert.alert('Error', 'This Lock Code is already registered.');
         setLoading(false);
         return;
       }
 
       // Create new cycle
       const cycleData = {
-        lockId,
+        lockCode,
         cycleName,
         ownerId: user.id,
         ownerName: user.name,
@@ -83,16 +83,16 @@ export default function RegisterLock() {
         </Text>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Lock ID</Text>
+          <Text style={styles.label}>Lock Code</Text>
           <TextInput
             style={styles.input}
             placeholder="e.g., LOCK_001"
-            value={lockId}
-            onChangeText={setLockId}
+            value={lockCode}
+            onChangeText={setLockCode}
             autoCapitalize="characters"
           />
           <Text style={styles.hint}>
-            This must match the Lock ID programmed in your Arduino
+            This must match the Lock Code programmed in your Arduino
           </Text>
         </View>
 

@@ -23,5 +23,6 @@ export const LOCK_STATUS = {
 export const CYCLE_STATUS = {
   AVAILABLE: 'available',
   RENTED: 'rented',
+  NOT_AVAILABLE: 'not_available',
   OFFLINE: 'offline',
 };
