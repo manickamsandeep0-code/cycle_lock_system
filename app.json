@@ -35,7 +35,13 @@
     },
     "scheme": "cyclerental",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Karunya Cycle Rental to use your location to show nearby cycles."
+        }
+      ]
     ],
     "extra": {
       "router": {
