@@ -1,0 +1,6 @@
+<svg width="2048" height="2048" xmlns="http://www.w3.org/2000/svg">
+  <rect width="2048" height="2048" fill="#ffffff"/>
+  <text x="1024" y="900" font-size="120" text-anchor="middle" fill="#1e40af" font-weight="bold">Karunya</text>
+  <text x="1024" y="1050" font-size="100" text-anchor="middle" fill="#1e40af">Cycle Rental</text>
+  <text x="1024" y="1200" font-size="300" text-anchor="middle">🚲</text>
+</svg>
