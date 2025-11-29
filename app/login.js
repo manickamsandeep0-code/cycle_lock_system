@@ -7,7 +7,7 @@ import { saveUserData, saveUserRole } from '../utils/storage';
 
 export default function Login() {
   const router = useRouter();
-  const [phoneNumber, phoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
