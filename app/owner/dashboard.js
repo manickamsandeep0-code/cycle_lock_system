@@ -211,15 +211,27 @@ export default function OwnerDashboard() {
 
         {cycles.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No Cycle Found</Text>
+            <Text style={styles.emptyTitle}>No Cycles Registered</Text>
             <Text style={styles.emptyText}>
-              Your cycle is not yet activated. Please ensure your lock device is online and connected.
+              Add your first cycle lock to start renting
             </Text>
+            <TouchableOpacity 
+              style={styles.registerButton}
+              onPress={() => router.push('/owner/register-lock')}
+            >
+              <Text style={styles.registerButtonText}>Register Cycle Lock</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
             <View style={styles.cyclesHeader}>
-              <Text style={styles.cyclesTitle}>My Cycle</Text>
+              <Text style={styles.cyclesTitle}>My Cycles</Text>
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={() => router.push('/owner/register-lock')}
+              >
+                <Text style={styles.addButtonText}>+ Add Cycle</Text>
+              </TouchableOpacity>
             </View>
 
             {cycles.map(renderCycleCard)}

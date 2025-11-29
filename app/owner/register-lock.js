@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getUserData } from '../../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS, KARUNYA_LOCATION } from '../../constants';
@@ -37,29 +37,37 @@ export default function RegisterLock() {
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        Alert.alert('Error', 'This Lock Code is already registered.');
+        const existingCycle = querySnapshot.docs[0].data();
+        
+        // If lock already has an owner, check if it's the same owner
+        if (existingCycle.ownerId) {
+          if (existingCycle.ownerId !== user.id) {
+            Alert.alert('Error', 'This Lock Code is already registered to another owner.');
+            setLoading(false);
+            return;
+          } else {
+            Alert.alert('Error', 'You have already registered this lock code.');
+            setLoading(false);
+            return;
+          }
+        }
+        // Lock exists but no owner - update it with owner info
+        const cycleDocId = querySnapshot.docs[0].id;
+        const cycleRef = doc(db, 'cycles', cycleDocId);
+        
+        await updateDoc(cycleRef, {
+          ownerId: user.id,
+          ownerName: user.name,
+          ownerPhone: user.phoneNumber,
+          cycleName: cycleName,
+          status: 'available',
+          registeredAt: new Date().toISOString(),
+        });
+      } else {
+        Alert.alert('Error', 'Invalid Lock Code. This lock does not exist in our system.');
         setLoading(false);
         return;
       }
-
-      // Create new cycle
-      const cycleData = {
-        lockCode,
-        cycleName,
-        ownerId: user.id,
-        ownerName: user.name,
-        ownerPhone: user.phoneNumber,
-        status: CYCLE_STATUS.AVAILABLE,
-        lockStatus: LOCK_STATUS.LOCKED,
-        location: {
-          latitude: KARUNYA_LOCATION.latitude,
-          longitude: KARUNYA_LOCATION.longitude,
-        },
-        createdAt: new Date().toISOString(),
-        isOnline: true,
-      };
-
-      await addDoc(cyclesRef, cycleData);
 
       Alert.alert(
         'Success',
