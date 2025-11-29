@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { doc, updateDoc, getDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS } from '../constants';
 import { calculateRemainingTime, formatMinutes } from '../utils/timeHelpers';
-import { createPaymentOrder, processPayment, holdPayment } from '../services/paymentService';
-import { unlockCycle } from '../services/lockService';
 
 export default function RentCycle() {
   const router = useRouter();
@@ -71,36 +69,6 @@ export default function RentCycle() {
         return;
       }
 
-      // Step 1: Create payment order
-      const orderResult = await createPaymentOrder(price, user.id, cycle.id, totalMinutes);
-      if (!orderResult.success) {
-        Alert.alert('Error', 'Failed to create payment order');
-        setLoading(false);
-        return;
-      }
-
-      // Step 2: Process payment through Razorpay
-      const paymentResult = await processPayment(
-        price,
-        orderResult.orderId,
-        {
-          name: user.name,
-          email: user.email || '',
-          phone: user.phoneNumber,
-        },
-        `Rent ${cycle.cycleName} for ${totalMinutes} minutes`
-      );
-
-      if (!paymentResult.success) {
-        Alert.alert('Payment Failed', paymentResult.error || 'Payment was cancelled');
-        setLoading(false);
-        return;
-      }
-
-      // Step 3: Hold payment (will be captured on ride completion)
-      await holdPayment(orderResult.orderId, paymentResult.paymentId);
-
-      // Step 4: Update cycle status in Firestore
       const cycleRef = doc(db, 'cycles', cycle.id);
       const rentalEndTime = new Date(Date.now() + totalMinutes * 60000).toISOString();
 
@@ -113,38 +81,12 @@ export default function RentCycle() {
         rentalDuration: totalMinutes,
         rentalPrice: price,
         rentalEndTime: rentalEndTime,
-        transactionId: orderResult.orderId,
-      });
-
-      // Step 5: Unlock the cycle via IoT
-      const unlockResult = await unlockCycle(cycle.lockId, user.id, orderResult.orderId);
-      
-      if (!unlockResult.success) {
-        Alert.alert(
-          'Warning',
-          'Cycle rented but unlock failed. Please contact the owner or support.',
-          [{ text: 'OK', onPress: () => router.replace('/my-rental') }]
-        );
-        setLoading(false);
-        return;
-      }
-
-      // Step 6: Create active rental tracking record
-      await addDoc(collection(db, 'activeRentals'), {
-        cycleId: cycle.id,
-        renterId: user.id,
-        ownerId: cycle.ownerId,
-        lockId: cycle.lockId,
-        startTime: new Date().toISOString(),
-        endTime: rentalEndTime,
-        transactionId: orderResult.orderId,
-        status: 'active',
       });
 
       Alert.alert(
         'Success!',
-        `Payment successful! ${cycle.cycleName} is now unlocked. Enjoy your ride!`,
-        [{ text: 'OK', onPress: () => router.replace('/my-rental') }]
+        `You have rented ${cycle.cycleName} for ${totalMinutes} minutes. Enjoy your ride!`,
+        [{ text: 'OK', onPress: () => router.replace('/map') }]
       );
     } catch (error) {
       console.error('Error renting cycle:', error);

@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
-import { lockCycle } from '../services/lockService';
-import { capturePayment } from '../services/paymentService';
-import { startLocationTracking, stopLocationTracking, getCurrentLocation } from '../services/locationService';
-import { isWithinCampus, getGeofenceWarning, distanceToBoundary, KARUNYA_CAMPUS_BOUNDARY, calculateOutOfBoundsPenalty } from '../services/geofenceService';
 
 export default function MyRental() {
   const router = useRouter();
@@ -18,17 +14,9 @@ export default function MyRental() {
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
-  const [geofenceWarning, setGeofenceWarning] = useState(null);
-  const [isOutsideCampus, setIsOutsideCampus] = useState(false);
-  const [rentalId, setRentalId] = useState(null);
 
   useEffect(() => {
     loadActiveRental();
-    
-    return () => {
-      // Cleanup location tracking when component unmounts
-      stopLocationTracking();
-    };
   }, []);
 
   const loadActiveRental = async () => {
@@ -45,24 +33,7 @@ export default function MyRental() {
 
       if (!querySnapshot.empty) {
         const cycleDoc = querySnapshot.docs[0];
-        const rentalData = { id: cycleDoc.id, ...cycleDoc.data() };
-        setRental(rentalData);
-        
-        // Find active rental record
-        const activeRentalsRef = collection(db, 'activeRentals');
-        const rentalQuery = query(activeRentalsRef, where('cycleId', '==', cycleDoc.id), where('status', '==', 'active'));
-        const rentalSnapshot = await getDocs(rentalQuery);
-        
-        if (!rentalSnapshot.empty) {
-          const activeRentalId = rentalSnapshot.docs[0].id;
-          setRentalId(activeRentalId);
-          
-          // Start location tracking
-          await startLocationTracking(activeRentalId, cycleDoc.id, user.id);
-          
-          // Start geofence monitoring
-          startGeofenceMonitoring();
-        }
+        setRental({ id: cycleDoc.id, ...cycleDoc.data() });
       }
     } catch (error) {
       console.error('Error loading rental:', error);
@@ -92,38 +63,10 @@ export default function MyRental() {
     try {
       const user = await getUserData();
       
-      // Step 1: Lock the cycle
-      const lockResult = await lockCycle(rental.lockId, user.id);
-      if (!lockResult.success) {
-        Alert.alert(
-          'Warning',
-          'Failed to lock the cycle. Please ensure the cycle is locked manually before leaving.',
-          [{ text: 'Continue Anyway', onPress: async () => await completeRentalProcess(user) }]
-        );
-        setCompleting(false);
-        return;
-      }
-
-      await completeRentalProcess(user);
-    } catch (error) {
-      console.error('Error completing ride:', error);
-      Alert.alert('Error', 'Failed to complete ride. Please try again.');
-      setCompleting(false);
-    }
-  };
-
-  const completeRentalProcess = async (user) => {
-    try {
-      // Step 2: Capture payment (convert hold to actual charge)
-      if (rental.transactionId) {
-        await capturePayment(rental.transactionId);
-      }
-
-      // Step 3: Create rental history record
+      // Create rental history record
       await addDoc(collection(db, 'rentalHistory'), {
         cycleId: rental.id,
         cycleName: rental.cycleName,
-        lockId: rental.lockId,
         ownerId: rental.ownerId,
         ownerName: rental.ownerName,
         renterId: user.id,
@@ -135,10 +78,9 @@ export default function MyRental() {
         price: rental.rentalPrice,
         rating: rating,
         review: review,
-        transactionId: rental.transactionId,
       });
 
-      // Step 4: Update cycle status
+      // Update cycle status
       const cycleRef = doc(db, 'cycles', rental.id);
       await updateDoc(cycleRef, {
         status: CYCLE_STATUS.NOT_AVAILABLE,
@@ -150,47 +92,19 @@ export default function MyRental() {
         rentalDuration: null,
         rentalPrice: null,
         rentalEndTime: null,
-        transactionId: null,
       });
 
       Alert.alert(
         'Thank You!',
-        'Cycle locked and payment processed. Thank you for your review!',
+        'Ride completed successfully. Thank you for your review!',
         [{ text: 'OK', onPress: () => router.replace('/map') }]
       );
     } catch (error) {
-      console.error('Error in rental completion:', error);
-      Alert.alert('Error', 'Failed to complete ride process. Please try again.');
+      console.error('Error completing ride:', error);
+      Alert.alert('Error', 'Failed to complete ride. Please try again.');
     } finally {
       setCompleting(false);
     }
-  };
-
-  const startGeofenceMonitoring = () => {
-    // Check geofence every 30 seconds
-    const interval = setInterval(async () => {
-      const locationResult = await getCurrentLocation();
-      
-      if (locationResult.success) {
-        const location = locationResult.location;
-        const withinCampus = isWithinCampus(location);
-        const distance = distanceToBoundary(location, KARUNYA_CAMPUS_BOUNDARY);
-        const warning = getGeofenceWarning(distance);
-        
-        setIsOutsideCampus(!withinCampus);
-        setGeofenceWarning(warning);
-        
-        if (!withinCampus) {
-          Alert.alert(
-            '⚠️ Outside Campus Boundary!',
-            'You have taken the cycle outside campus. Please return immediately to avoid penalty charges.',
-            [{ text: 'OK' }]
-          );
-        }
-      }
-    }, 30000); // Check every 30 seconds
-    
-    return () => clearInterval(interval);
   };
 
   if (loading) {
@@ -278,12 +192,6 @@ export default function MyRental() {
     <ScrollView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Active Rental</Text>
-        
-        {geofenceWarning && (
-          <View style={[styles.warningBanner, isOutsideCampus && styles.dangerBanner]}>
-            <Text style={styles.warningText}>{geofenceWarning}</Text>
-          </View>
-        )}
         
         <View style={styles.rentalCard}>
           <Text style={styles.cycleName}>{rental.cycleName}</Text>
@@ -458,23 +366,6 @@ const styles = StyleSheet.create({
   completeButtonText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  warningBanner: {
-    backgroundColor: '#fef3c7',
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  dangerBanner: {
-    backgroundColor: '#fee2e2',
-    borderLeftColor: '#ef4444',
-  },
-  warningText: {
-    color: '#92400e',
-    fontSize: 14,
     fontWeight: '600',
   },
   button: {
