@@ -26,6 +26,13 @@ export default function Layout() {
           options={{ headerShown: false }} 
         />
         <Stack.Screen 
+          name="rent-cycle" 
+          options={{ 
+            title: 'Rent Cycle',
+            presentation: 'modal'
+          }} 
+        />
+        <Stack.Screen 
           name="owner/dashboard" 
           options={{ headerShown: false }} 
         />
@@ -34,6 +41,20 @@ export default function Layout() {
           options={{ 
             title: 'Register Lock',
             presentation: 'modal'
+          }} 
+        />
+        <Stack.Screen 
+          name="owner/set-availability" 
+          options={{ 
+            title: 'Set Availability',
+            presentation: 'modal'
+          }} 
+        />
+        <Stack.Screen 
+          name="owner/cycle-map" 
+          options={{ 
+            title: 'Cycle Location',
+            headerShown: false
           }} 
         />
       </Stack>

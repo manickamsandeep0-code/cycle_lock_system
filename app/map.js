@@ -65,20 +65,13 @@ export default function Map() {
   };
 
   const handleRentCycle = async () => {
-    if (!selectedCycle || !user) return;
-    try {
-      const cycleRef = doc(db, 'cycles', selectedCycle.id);
-      await updateDoc(cycleRef, {
-        status: CYCLE_STATUS.RENTED,
-        lockStatus: LOCK_STATUS.UNLOCK_REQUESTED,
-        rentedBy: user.id,
-        rentedAt: new Date().toISOString(),
-      });
-      Alert.alert('Success', 'Cycle unlocked! Please pick it up.', [{ text: 'OK', onPress: () => setSelectedCycle(null) }]);
-    } catch (error) {
-      console.error('Error renting cycle:', error);
-      Alert.alert('Error', 'Failed to rent cycle.');
-    }
+    if (!selectedCycle) return;
+    
+    // Navigate to rent cycle screen with cycle data
+    router.push({
+      pathname: '/rent-cycle',
+      params: { cycle: JSON.stringify(selectedCycle) }
+    });
   };
 
   const handleWebViewMessage = (event) => {

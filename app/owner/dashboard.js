@@ -146,16 +146,37 @@ export default function OwnerDashboard() {
           </View>
         )}
 
-        {!isRented && (
+        <View style={styles.actionButtons}>
           <TouchableOpacity 
-            style={[styles.toggleButton, !isAvailable && styles.toggleButtonInactive]}
-            onPress={() => toggleCycleAvailability(cycle.id, cycle.status)}
+            style={styles.mapButton}
+            onPress={() => router.push({
+              pathname: '/owner/cycle-map',
+              params: { cycleId: cycle.id, cycleName: cycle.cycleName }
+            })}
           >
-            <Text style={styles.toggleButtonText}>
-              {isAvailable ? 'Mark as Unavailable' : 'Mark as Available'}
-            </Text>
+            <Text style={styles.mapButtonText}>📍 View on Map</Text>
           </TouchableOpacity>
-        )}
+
+          {!isRented && (
+            <TouchableOpacity 
+              style={[styles.toggleButton, !isAvailable && styles.toggleButtonInactive]}
+              onPress={() => {
+                if (isAvailable) {
+                  toggleCycleAvailability(cycle.id, cycle.status);
+                } else {
+                  router.push({
+                    pathname: '/owner/set-availability',
+                    params: { cycleId: cycle.id, cycleName: cycle.cycleName }
+                  });
+                }
+              }}
+            >
+              <Text style={styles.toggleButtonText}>
+                {isAvailable ? 'Mark as Unavailable' : 'Set Available'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {isRented && (
           <View style={styles.rentedNote}>
@@ -475,12 +496,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#991b1b',
   },
+  actionButtons: {
+    gap: 8,
+    marginTop: 12,
+  },
+  mapButton: {
+    backgroundColor: '#10b981',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  mapButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
   toggleButton: {
     backgroundColor: '#1e40af',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 12,
   },
   toggleButtonInactive: {
     backgroundColor: '#10b981',
