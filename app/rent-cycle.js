@@ -5,15 +5,19 @@ import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS } from '../constants';
+import { calculateRemainingTime, formatMinutes } from '../utils/timeHelpers';
 
 export default function RentCycle() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const cycle = JSON.parse(params.cycle);
+  const requestedDuration = parseInt(params.requestedDuration) || null;
   
-  const [hours, setHours] = useState('');
-  const [minutes, setMinutes] = useState('');
+  const [hours, setHours] = useState(requestedDuration ? String(Math.floor(requestedDuration / 60)) : '');
+  const [minutes, setMinutes] = useState(requestedDuration ? String(requestedDuration % 60) : '');
   const [loading, setLoading] = useState(false);
+
+  const remainingMinutes = cycle.remainingMinutes || calculateRemainingTime(cycle);
 
   const calculateTotalMinutes = () => {
     const h = parseInt(hours) || 0;
@@ -35,10 +39,10 @@ export default function RentCycle() {
       return;
     }
 
-    if (totalMinutes > cycle.availableMinutes) {
+    if (totalMinutes > remainingMinutes) {
       Alert.alert(
         'Error', 
-        `This cycle is only available for ${cycle.availableMinutes} minutes. Please select a shorter duration.`
+        `This cycle only has ${formatMinutes(remainingMinutes)} remaining. Please select a shorter duration.`
       );
       return;
     }
@@ -105,7 +109,7 @@ export default function RentCycle() {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Available for:</Text>
-            <Text style={styles.infoValue}>{cycle.availableMinutes} minutes</Text>
+            <Text style={styles.infoValue}>{formatMinutes(remainingMinutes)}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Price:</Text>
@@ -154,7 +158,7 @@ export default function RentCycle() {
               <Text style={styles.summaryLabel}>Total Cost:</Text>
               <Text style={styles.summaryPrice}>₹{calculatePrice()}</Text>
             </View>
-            {calculateTotalMinutes() > cycle.availableMinutes && (
+            {calculateTotalMinutes() > remainingMinutes && (
               <Text style={styles.warningText}>
                 ⚠️ Exceeds available time!
               </Text>

@@ -8,6 +8,8 @@ import { db } from '../config/firebase';
 import { getUserData, getUserRole, clearUserData } from '../utils/storage';
 import { KARUNYA_LOCATION, USER_ROLES, CYCLE_STATUS, LOCK_STATUS } from '../constants';
 import CycleDetailsModal from '../components/CycleDetailsModal';
+import DurationSelectionModal from '../components/DurationSelectionModal';
+import { calculateRemainingTime } from '../utils/timeHelpers';
 
 export default function Map() {
   const router = useRouter();
@@ -15,9 +17,12 @@ export default function Map() {
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [cycles, setCycles] = useState([]);
+  const [filteredCycles, setFilteredCycles] = useState([]);
   const [selectedCycle, setSelectedCycle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(null);
+  const [showDurationDialog, setShowDurationDialog] = useState(true);
+  const [requestedDuration, setRequestedDuration] = useState(null);
 
   useEffect(() => {
     loadUserData();
@@ -29,8 +34,29 @@ export default function Map() {
     const cyclesRef = collection(db, 'cycles');
     const q = query(cyclesRef, where('status', 'in', [CYCLE_STATUS.AVAILABLE, CYCLE_STATUS.RENTED]));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const cyclesData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      const cyclesData = snapshot.docs.map(d => {
+        const data = d.data();
+        // Calculate remaining time for each cycle
+        const remainingMinutes = calculateRemainingTime(data);
+        return { 
+          id: d.id, 
+          ...data,
+          remainingMinutes 
+        };
+      });
       setCycles(cyclesData);
+      
+      // Filter cycles based on requested duration
+      if (requestedDuration !== null) {
+        const available = cyclesData.filter(c => 
+          c.status === CYCLE_STATUS.AVAILABLE && 
+          c.remainingMinutes >= requestedDuration
+        );
+        setFilteredCycles(available);
+      } else {
+        setFilteredCycles(cyclesData);
+      }
+      
       setLoading(false);
     }, (err) => {
       console.error('Error fetching cycles:', err);
@@ -38,7 +64,7 @@ export default function Map() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [requestedDuration]);
 
   const loadUserData = async () => {
     const userData = await getUserData();
@@ -67,11 +93,24 @@ export default function Map() {
   const handleRentCycle = async () => {
     if (!selectedCycle) return;
     
-    // Navigate to rent cycle screen with cycle data
+    // Navigate to rent cycle screen with cycle data and requested duration
     router.push({
       pathname: '/rent-cycle',
-      params: { cycle: JSON.stringify(selectedCycle) }
+      params: { 
+        cycle: JSON.stringify(selectedCycle),
+        requestedDuration: requestedDuration 
+      }
     });
+  };
+
+  const handleDurationConfirm = (totalMinutes) => {
+    setRequestedDuration(totalMinutes);
+    setShowDurationDialog(false);
+  };
+
+  const handleDurationCancel = () => {
+    // Go back if user cancels
+    router.back();
   };
 
   const handleWebViewMessage = (event) => {
@@ -84,7 +123,7 @@ export default function Map() {
   };
 
   const generateMapHTML = () => {
-    const cyclesJSON = JSON.stringify(cycles || []);
+    const cyclesJSON = JSON.stringify(filteredCycles || []);
     const userLocationJSON = JSON.stringify(userLocation || null);
     return `
 <!DOCTYPE html>
@@ -163,8 +202,19 @@ export default function Map() {
       />
 
       <View style={styles.infoBanner}>
-        <Text style={styles.infoText}>{cycles.length} cycle(s) available on campus</Text>
+        <Text style={styles.infoText}>
+          {requestedDuration 
+            ? `${filteredCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE).length} cycle(s) available for ${Math.floor(requestedDuration / 60)}h ${requestedDuration % 60}m`
+            : `${cycles.length} cycle(s) on campus`
+          }
+        </Text>
       </View>
+
+      <DurationSelectionModal
+        visible={showDurationDialog}
+        onClose={handleDurationCancel}
+        onConfirm={handleDurationConfirm}
+      />
 
       {selectedCycle && (
         <CycleDetailsModal

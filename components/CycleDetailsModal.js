@@ -1,7 +1,10 @@
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { formatMinutes } from '../utils/timeHelpers';
 
 export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
   if (!cycle) return null;
+
+  const remainingTime = cycle.remainingMinutes || 0;
 
   return (
     <Modal
@@ -38,6 +41,11 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
             <View style={styles.detailRow}>
               <Text style={styles.label}>Lock ID</Text>
               <Text style={styles.value}>{cycle.lockId}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>Available For</Text>
+              <Text style={styles.value}>{formatMinutes(remainingTime)}</Text>
             </View>
 
             <View style={styles.statusContainer}>

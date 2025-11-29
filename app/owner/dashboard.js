@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getUserData, clearUserData } from '../../utils/storage';
 import { CYCLE_STATUS } from '../../constants';
@@ -14,6 +14,31 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     loadUserAndCycles();
+    
+    // Set up real-time listener for cycles
+    const setupRealtimeListener = async () => {
+      const userData = await getUserData();
+      if (!userData) return;
+
+      const cyclesRef = collection(db, 'cycles');
+      const q = query(cyclesRef, where('ownerId', '==', userData.id));
+      
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const cyclesList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setCycles(cyclesList);
+      });
+
+      return unsubscribe;
+    };
+
+    const unsubscribePromise = setupRealtimeListener();
+    
+    return () => {
+      unsubscribePromise.then(unsub => unsub && unsub());
+    };
   }, []);
 
   const loadUserAndCycles = async () => {
