@@ -6,6 +6,8 @@ import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS } from '../constants';
 import { calculateRemainingTime, formatMinutes } from '../utils/timeHelpers';
+import { unlockCycle } from '../services/lockService';
+import { startLocationTracking } from '../services/locationService';
 
 export default function RentCycle() {
   const router = useRouter();
@@ -72,6 +74,10 @@ export default function RentCycle() {
       const cycleRef = doc(db, 'cycles', cycle.id);
       const rentalEndTime = new Date(Date.now() + totalMinutes * 60000).toISOString();
 
+      // Step 1: Unlock the cycle
+      await unlockCycle(cycle.lockId);
+
+      // Step 2: Update cycle status in Firestore
       await updateDoc(cycleRef, {
         status: CYCLE_STATUS.RENTED,
         currentRenter: user.id,
@@ -83,10 +89,18 @@ export default function RentCycle() {
         rentalEndTime: rentalEndTime,
       });
 
+      // Step 3: Start location tracking
+      try {
+        await startLocationTracking(cycle.id);
+      } catch (locError) {
+        console.warn('Location tracking failed to start:', locError);
+        // Don't block rental if location tracking fails
+      }
+
       Alert.alert(
         'Success!',
-        `You have rented ${cycle.cycleName} for ${totalMinutes} minutes. Enjoy your ride!`,
-        [{ text: 'OK', onPress: () => router.replace('/map') }]
+        `Cycle unlocked! You have rented ${cycle.cycleName} for ${totalMinutes} minutes. Enjoy your ride!`,
+        [{ text: 'OK', onPress: () => router.replace('/my-rental') }]
       );
     } catch (error) {
       console.error('Error renting cycle:', error);

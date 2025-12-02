@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
+import { lockCycle } from '../services/lockService';
+import { stopLocationTracking, getCurrentLocation } from '../services/locationService';
+import { checkGeofence } from '../services/geofenceService';
+import { checkAndExpireRental } from '../services/expirationService';
 
 export default function MyRental() {
   const router = useRouter();
@@ -14,10 +18,59 @@ export default function MyRental() {
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
+  const [geofenceWarning, setGeofenceWarning] = useState(null);
+  const [expirationCheckInterval, setExpirationCheckInterval] = useState(null);
 
   useEffect(() => {
     loadActiveRental();
+    
+    return () => {
+      // Cleanup on unmount
+      if (expirationCheckInterval) {
+        clearInterval(expirationCheckInterval);
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    // Monitor geofence and expiration for active rental
+    if (rental) {
+      // Check geofence every 30 seconds
+      const geofenceInterval = setInterval(async () => {
+        try {
+          const location = await getCurrentLocation();
+          const geofenceStatus = checkGeofence(location.latitude, location.longitude);
+          
+          if (geofenceStatus.isViolation) {
+            setGeofenceWarning(geofenceStatus.message);
+          } else {
+            setGeofenceWarning(null);
+          }
+        } catch (error) {
+          console.error('Geofence check error:', error);
+        }
+      }, 30000);
+
+      // Check expiration every minute
+      const expInterval = setInterval(async () => {
+        const expired = await checkAndExpireRental(rental.id);
+        if (expired) {
+          Alert.alert(
+            'Rental Expired',
+            'Your rental time has ended. The cycle has been locked automatically.',
+            [{ text: 'OK', onPress: () => router.replace('/map') }]
+          );
+        }
+      }, 60000);
+
+      setExpirationCheckInterval(expInterval);
+
+      return () => {
+        clearInterval(geofenceInterval);
+        clearInterval(expInterval);
+      };
+    }
+  }, [rental]);
 
   const loadActiveRental = async () => {
     try {
@@ -63,10 +116,17 @@ export default function MyRental() {
     try {
       const user = await getUserData();
       
-      // Create rental history record
+      // Step 1: Lock the cycle
+      await lockCycle(rental.lockId);
+
+      // Step 2: Stop location tracking
+      stopLocationTracking();
+
+      // Step 3: Create rental history record
       await addDoc(collection(db, 'rentalHistory'), {
         cycleId: rental.id,
         cycleName: rental.cycleName,
+        lockId: rental.lockId,
         ownerId: rental.ownerId,
         ownerName: rental.ownerName,
         renterId: user.id,
@@ -78,13 +138,13 @@ export default function MyRental() {
         price: rental.rentalPrice,
         rating: rating,
         review: review,
+        autoCompleted: false
       });
 
-      // Update cycle status
+      // Step 4: Update cycle status
       const cycleRef = doc(db, 'cycles', rental.id);
       await updateDoc(cycleRef, {
         status: CYCLE_STATUS.NOT_AVAILABLE,
-        lockStatus: LOCK_STATUS.LOCKED,
         currentRenter: null,
         currentRenterName: null,
         currentRenterPhone: null,
@@ -92,11 +152,13 @@ export default function MyRental() {
         rentalDuration: null,
         rentalPrice: null,
         rentalEndTime: null,
+        availableMinutes: 0,
+        availableUntil: null
       });
 
       Alert.alert(
         'Thank You!',
-        'Ride completed successfully. Thank you for your review!',
+        'Cycle locked! Ride completed successfully. Thank you for your review!',
         [{ text: 'OK', onPress: () => router.replace('/map') }]
       );
     } catch (error) {
@@ -221,6 +283,14 @@ export default function MyRental() {
           <View style={styles.timeBox}>
             <Text style={styles.timeText}>{timeRemaining()}</Text>
           </View>
+
+          {geofenceWarning && (
+            <View style={styles.warningBox}>
+              <Text style={styles.warningIcon}>⚠️</Text>
+              <Text style={styles.warningText}>{geofenceWarning}</Text>
+              <Text style={styles.warningSubtext}>Please return to campus!</Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity 
@@ -326,6 +396,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1e40af',
+  },
+  warningBox: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 2,
+    borderColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  warningIcon: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  warningText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#dc2626',
+    textAlign: 'center',
+  },
+  warningSubtext: {
+    fontSize: 12,
+    color: '#991b1b',
+    marginTop: 4,
   },
   ratingContainer: {
     marginBottom: 24,
