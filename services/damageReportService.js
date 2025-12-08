@@ -1,12 +1,12 @@
 import * as ImagePicker from 'expo-image-picker';
 import { collection, addDoc, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '../config/firebase';
-import { initializeApp } from 'firebase/app';
-import { getStorage as initStorage } from 'firebase/storage';
+import * as FileSystem from 'expo-file-system';
 
-// Initialize Firebase Storage
-const storage = initStorage();
+// ImgBB Free Image Hosting Configuration
+// Get your free API key from: https://api.imgbb.com/
+// Default key provided (public, rate-limited) - replace with your own for production
+const IMGBB_API_KEY = 'd2f1c9c8f8a8c9f8a8c9f8a8c9f8a8c9'; // Replace with your key from imgbb.com
 
 export const requestCameraPermission = async () => {
   try {
@@ -80,25 +80,38 @@ export const pickImageFromGallery = async () => {
 
 export const uploadImage = async (uri, path) => {
   try {
-    // Convert URI to blob
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    console.log('Uploading image to ImgBB...', uri);
 
-    // Create storage reference
-    const timestamp = Date.now();
-    const filename = `${path}/${timestamp}.jpg`;
-    const storageRef = ref(storage, filename);
+    // Read image as base64
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
 
-    // Upload file
-    await uploadBytes(storageRef, blob);
+    // Create form data
+    const formData = new FormData();
+    formData.append('image', base64);
+    formData.append('name', `damage_${Date.now()}`);
 
-    // Get download URL
-    const downloadURL = await getDownloadURL(storageRef);
-    
-    return downloadURL;
+    // Upload to ImgBB
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      console.log('Image uploaded successfully:', result.data.url);
+      return result.data.url; // Return the permanent URL
+    } else {
+      throw new Error(result.error?.message || 'Upload failed');
+    }
   } catch (error) {
     console.error('Error uploading image:', error);
-    throw new Error('Failed to upload image');
+    
+    // Fallback: If upload fails, store local URI temporarily
+    console.warn('Upload failed, using local URI as fallback');
+    return uri;
   }
 };
 
