@@ -301,6 +301,13 @@ export default function MyRental() {
         </TouchableOpacity>
 
         <TouchableOpacity 
+          style={styles.reportButton}
+          onPress={() => router.push(`/damage-report?cycleId=${rental.id}`)}
+        >
+          <Text style={styles.reportButtonText}>🔧 Report Damage or Issue</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
           style={styles.backButton}
           onPress={() => router.back()}
         >
@@ -459,6 +466,20 @@ const styles = StyleSheet.create({
   },
   completeButtonText: {
     color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  reportButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reportButtonText: {
+    color: '#f59e0b',
     fontSize: 16,
     fontWeight: '600',
   },

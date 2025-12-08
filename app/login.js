@@ -81,8 +81,14 @@ export default function Login() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => router.push('/otp-register')}>
+            <Text style={styles.linkText}>Register with OTP</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
           <TouchableOpacity onPress={() => router.push('/register')}>
-            <Text style={styles.linkText}>Register</Text>
+            <Text style={styles.linkTextSecondary}>Quick Register (No OTP)</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -158,5 +164,10 @@ const styles = StyleSheet.create({
     color: '#1e40af',
     fontSize: 14,
     fontWeight: '600',
+  },
+  linkTextSecondary: {
+    color: '#6b7280',
+    fontSize: 13,
+    textDecorationLine: 'underline',
   },
 });
