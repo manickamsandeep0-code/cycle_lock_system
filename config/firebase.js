@@ -14,7 +14,7 @@ const firebaseConfig = {
   messagingSenderId: "953501174214",
   appId: "1:953501174214:web:c802e73356b00549964ac7",
   measurementId: "G-2YLGZS04WM",
-  databaseURL: "https://karunya-cycle-rental-default-rtdb.firebaseio.com" // For Arduino IoT communication
+  databaseURL: "https://karunya-cycle-rental-default-rtdb.asia-southeast1.firebasedatabase.app" // Asia Southeast region
 };
 
 // Initialize Firebase

@@ -30,8 +30,8 @@ const char* APN = "airtelgprs.com";  // ← CHANGE THIS to your network's APN
 const char* APN_USER = "";           // Usually empty for Indian networks
 const char* APN_PASS = "";           // Usually empty for Indian networks
 
-const char* FIREBASE_HOST = "karunya-cycle-rental-default-rtdb.firebaseio.com";  // Firebase Realtime Database URL
-const char* FIREBASE_AUTH = "NvdR1aTYQz1TL6oVb1HgpXVZ5nRCTnYsESVToYbl";      // Your Firebase Database Secret (optional, get from Firebase Console)
+const char* FIREBASE_HOST = "karunya-cycle-rental-default-rtdb.asia-southeast1.firebasedatabase.app";  // Firebase Realtime Database URL (REGION SPECIFIC)
+const char* FIREBASE_AUTH = "NvdR1aTYQz1TL6oVb1HgpXVZ5nRCTnYsESVToYbl";      // Your Firebase Database Secret
 const int UPDATE_INTERVAL = 10000;   // Send location every 10 seconds (10000ms)
 
 // Software Serial for GSM and GPS
