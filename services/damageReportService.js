@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system';
 // ImgBB Free Image Hosting Configuration
 // Get your free API key from: https://api.imgbb.com/
 // Default key provided (public, rate-limited) - replace with your own for production
-const IMGBB_API_KEY = 'd2f1c9c8f8a8c9f8a8c9f8a8c9f8a8c9'; // Replace with your key from imgbb.com
+const IMGBB_API_KEY = '64d001a02e0bad86c4f1298858c3b7a1'; // Replace with your key from imgbb.com
 
 export const requestCameraPermission = async () => {
   try {
