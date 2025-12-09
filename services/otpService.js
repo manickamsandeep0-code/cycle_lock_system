@@ -1,84 +1,107 @@
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { collection, query, where, getDocs, setDoc, doc, getDoc, addDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
-// Store verification ID temporarily
-let confirmationResult = null;
+// Simple Firestore-based OTP implementation for Expo/React Native
+// This stores OTPs in Firestore for development/testing. For production,
+// use a backend that sends SMS via a provider (Twilio/Razorpay etc.) and
+// verifies codes securely.
+
+const OTP_COLLECTION = 'otpRequests';
+const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 export const sendOTP = async (phoneNumber) => {
   try {
-    // Format phone number (ensure +91 prefix for India)
-    const formattedPhone = phoneNumber.startsWith('+') 
-      ? phoneNumber 
-      : `+91${phoneNumber}`;
+    const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+91${phoneNumber}`;
 
-    console.log('Sending OTP to:', formattedPhone);
-
-    // For React Native Expo, we use invisible reCAPTCHA
-    // Note: In production, you should implement this on a backend server for better security
-    
-    // Firebase phone auth
-    confirmationResult = await signInWithPhoneNumber(auth, formattedPhone);
-    
-    return {
-      success: true,
-      verificationId: confirmationResult.verificationId,
-      message: 'OTP sent successfully'
+    // For dev convenience, allow a few test numbers with static codes
+    const testNumbers = {
+      '+911234567890': '123456'
     };
+
+    const code = testNumbers[formattedPhone] || generateCode();
+
+    const now = Date.now();
+    const docRef = doc(db, OTP_COLLECTION, formattedPhone.replace(/\+/g, '')); // id by phone
+
+    await setDoc(docRef, {
+      phoneNumber: formattedPhone,
+      code,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + OTP_TTL_MS).toISOString(),
+      verified: false
+    });
+
+    // Log code to console for development (replace with SMS send in prod)
+    console.log(`OTP for ${formattedPhone}: ${code}`);
+
+    return { success: true, message: 'OTP generated and stored', phoneNumber: formattedPhone };
   } catch (error) {
-    console.error('Error sending OTP:', error);
-    
-    // Handle specific errors
-    if (error.code === 'auth/invalid-phone-number') {
-      throw new Error('Invalid phone number format');
-    } else if (error.code === 'auth/too-many-requests') {
-      throw new Error('Too many requests. Please try again later.');
-    } else if (error.code === 'auth/quota-exceeded') {
-      throw new Error('SMS quota exceeded. Please try again later.');
-    }
-    
-    throw new Error(error.message || 'Failed to send OTP');
+    console.error('Error generating OTP:', error);
+    throw new Error('Failed to generate OTP');
   }
 };
 
-export const verifyOTP = async (otp) => {
+export const verifyOTP = async (phoneNumber, code) => {
   try {
-    if (!confirmationResult) {
-      throw new Error('No OTP request found. Please request OTP again.');
+    const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+91${phoneNumber}`;
+    const docId = formattedPhone.replace(/\+/g, '');
+    const ref = doc(db, OTP_COLLECTION, docId);
+    const otpDoc = await getDoc(ref);
+
+    if (!otpDoc.exists()) {
+      throw new Error('No OTP request found for this number');
     }
 
-    // Verify the OTP code
-    const result = await confirmationResult.confirm(otp);
-    const user = result.user;
+    const data = otpDoc.data();
+    if (data.verified) {
+      throw new Error('OTP already used');
+    }
 
-    console.log('OTP verified successfully:', user.uid);
+    const now = Date.now();
+    if (new Date(data.expiresAt).getTime() < now) {
+      throw new Error('OTP has expired');
+    }
 
-    return {
-      success: true,
-      uid: user.uid,
-      phoneNumber: user.phoneNumber
-    };
+    if (data.code !== code) {
+      throw new Error('Invalid OTP');
+    }
+
+    // Mark verified
+    await setDoc(ref, { ...data, verified: true }, { merge: true });
+
+    // Check if user exists
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('phoneNumber', '==', formattedPhone));
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+      const userDoc = snapshot.docs[0];
+      return { success: true, uid: userDoc.id, phoneNumber: formattedPhone };
+    }
+
+    // Create placeholder user doc and return its id so frontend can complete profile
+    const newUserRef = await addDoc(usersRef, {
+      phoneNumber: formattedPhone,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    return { success: true, uid: newUserRef.id, phoneNumber: formattedPhone };
   } catch (error) {
     console.error('Error verifying OTP:', error);
-    
-    if (error.code === 'auth/invalid-verification-code') {
-      throw new Error('Invalid OTP. Please check and try again.');
-    } else if (error.code === 'auth/code-expired') {
-      throw new Error('OTP has expired. Please request a new one.');
-    }
-    
-    throw new Error(error.message || 'Failed to verify OTP');
+    throw error;
   }
 };
 
 export const resendOTP = async (phoneNumber) => {
-  // Reset confirmation result and send new OTP
-  confirmationResult = null;
   return await sendOTP(phoneNumber);
 };
 
 export const checkUserExists = async (uid) => {
   try {
+    if (!uid) return false;
     const userDoc = await getDoc(doc(db, 'users', uid));
     return userDoc.exists();
   } catch (error) {
@@ -95,7 +118,7 @@ export const createUserProfile = async (uid, userData) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error creating user profile:', error);

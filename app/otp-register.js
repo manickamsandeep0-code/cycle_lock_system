@@ -45,7 +45,7 @@ export default function OTPRegister() {
 
     setLoading(true);
     try {
-      const result = await verifyOTP(otp);
+      const result = await verifyOTP(phoneNumber, otp);
       setUid(result.uid);
 
       // Check if user already exists
