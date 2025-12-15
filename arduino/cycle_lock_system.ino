@@ -19,7 +19,7 @@
 #define RELAY_PIN 7
 
 // Configuration - IMPORTANT: UPDATE THESE VALUES!
-const char* LOCK_ID = "LOCK_0007";  // CHANGE THIS TO YOUR UNIQUE LOCK ID (must match Firestore)
+const char* LOCK_ID = "LOCK_0002";  // CHANGE THIS TO YOUR UNIQUE LOCK ID (must match Firestore)
 
 // APN Settings - Choose based on your SIM card provider:
 // Airtel:  "airtelgprs.com"
