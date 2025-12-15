@@ -1,21 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { getUserData, getUserRole, clearUserData } from '../utils/storage';
-import { KARUNYA_LOCATION, USER_ROLES, CYCLE_STATUS, LOCK_STATUS } from '../constants';
+// CHANGED: Import Realtime Database functions
+import { ref, onValue } from 'firebase/database'; 
+import { collection, getDocs } from 'firebase/firestore';
+// CHANGED: Import realtimeDb
+import { db, realtimeDb } from '../config/firebase'; 
+import { getUserData, clearUserData } from '../utils/storage';
+import { KARUNYA_LOCATION, CYCLE_STATUS } from '../constants';
 import CycleDetailsModal from '../components/CycleDetailsModal';
 import DurationSelectionModal from '../components/DurationSelectionModal';
-import { calculateRemainingTime } from '../utils/timeHelpers';
 
 export default function Map() {
   const router = useRouter();
   const webViewRef = useRef(null);
-  const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
   const [cycles, setCycles] = useState([]);
   const [filteredCycles, setFilteredCycles] = useState([]);
   const [selectedCycle, setSelectedCycle] = useState(null);
@@ -29,48 +29,73 @@ export default function Map() {
     requestLocationPermission();
   }, []);
 
+  // --- CRITICAL FIX: Listen to Realtime Database for Live Location ---
   useEffect(() => {
-    // subscribe to cycles
-    const cyclesRef = collection(db, 'cycles');
-    const q = query(cyclesRef, where('status', 'in', [CYCLE_STATUS.AVAILABLE, CYCLE_STATUS.RENTED]));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const cyclesData = snapshot.docs.map(d => {
-        const data = d.data();
-        // Calculate remaining time for each cycle
-        const remainingMinutes = calculateRemainingTime(data);
-        return { 
-          id: d.id, 
-          ...data,
-          remainingMinutes 
-        };
-      });
-      setCycles(cyclesData);
-      
-      // Filter cycles based on requested duration
-      if (requestedDuration !== null) {
-        const available = cyclesData.filter(c => 
-          c.status === CYCLE_STATUS.AVAILABLE && 
-          c.remainingMinutes >= requestedDuration
-        );
-        setFilteredCycles(available);
-      } else {
-        setFilteredCycles(cyclesData);
-      }
-      
-      setLoading(false);
-    }, (err) => {
-      console.error('Error fetching cycles:', err);
-      setLoading(false);
-    });
+    const fetchCycles = async () => {
+      try {
+        // 1. Get static cycle details (Name, Price, Owner) from Firestore
+        const cyclesSnapshot = await getDocs(collection(db, 'cycles'));
+        const cyclesMap = {};
+        cyclesSnapshot.forEach(doc => {
+          cyclesMap[doc.data().lockId] = { id: doc.id, ...doc.data() };
+        });
 
-    return () => unsubscribe();
+        // 2. Listen to LIVE data (Location, Status) from Realtime Database
+        const locksRef = ref(realtimeDb, 'locks');
+        const unsubscribe = onValue(locksRef, (snapshot) => {
+          const locksData = snapshot.val();
+          if (!locksData) return;
+
+          const mergedData = Object.keys(locksData).map(lockId => {
+            const lock = locksData[lockId];
+            const metaData = cyclesMap[lockId] || {}; // Match using Lock ID
+
+            // If Arduino hasn't sent location yet, fallback to fixed location or defaults
+            const lat = lock.location?.latitude || metaData.location?.latitude || KARUNYA_LOCATION.latitude;
+            const lng = lock.location?.longitude || metaData.location?.longitude || KARUNYA_LOCATION.longitude;
+            
+            // Determine status based on Arduino's "locked" flag
+            // If lock.status.locked is true, it's AVAILABLE to rent. If false, it's RENTED.
+            const isLocked = lock.status?.locked ?? true;
+            const status = isLocked ? CYCLE_STATUS.AVAILABLE : CYCLE_STATUS.RENTED;
+
+            return {
+              id: metaData.id || lockId,
+              lockId: lockId,
+              ...metaData, // Name, Price, etc.
+              location: { latitude: lat, longitude: lng }, // Live GPS coordinates
+              status: status,
+              battery: lock.battery // Live battery level
+            };
+          });
+
+          setCycles(mergedData);
+          filterCycles(mergedData, requestedDuration);
+          setLoading(false);
+        });
+
+        return () => unsubscribe();
+      } catch (err) {
+        console.error('Error fetching cycles:', err);
+        setLoading(false);
+      }
+    };
+
+    fetchCycles();
   }, [requestedDuration]);
 
+  const filterCycles = (allCycles, duration) => {
+    if (duration !== null) {
+      // Logic: You can filter by battery life required for duration if needed
+      const available = allCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE);
+      setFilteredCycles(available);
+    } else {
+      setFilteredCycles(allCycles);
+    }
+  };
+
   const loadUserData = async () => {
-    const userData = await getUserData();
-    const role = await getUserRole();
-    setUser(userData);
-    setUserRole(role);
+    await getUserData();
   };
 
   const requestLocationPermission = async () => {
@@ -92,8 +117,6 @@ export default function Map() {
 
   const handleRentCycle = async () => {
     if (!selectedCycle) return;
-    
-    // Navigate to rent cycle screen with cycle data and requested duration
     router.push({
       pathname: '/rent-cycle',
       params: { 
@@ -109,7 +132,6 @@ export default function Map() {
   };
 
   const handleDurationCancel = () => {
-    // Go back if user cancels
     router.back();
   };
 
@@ -125,6 +147,8 @@ export default function Map() {
   const generateMapHTML = () => {
     const cyclesJSON = JSON.stringify(filteredCycles || []);
     const userLocationJSON = JSON.stringify(userLocation || null);
+    
+    // Note: We use the cycle.location.latitude provided by the Arduino
     return `
 <!DOCTYPE html>
 <html>
@@ -150,14 +174,19 @@ export default function Map() {
     }
 
     cycles.forEach(cycle => {
-      const isAvailable = cycle.status === '${CYCLE_STATUS.AVAILABLE}';
-      const marker = L.marker([cycle.location.latitude, cycle.location.longitude], {
-        icon: L.divIcon({ className: 'custom-div-icon', html: '<div class="custom-marker">' + (isAvailable ? '🚲' : '🔒') + '</div>', iconSize: [40, 40], iconAnchor: [20, 20] })
-      }).addTo(map);
-      marker.on('click', () => {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'markerClick', cycle }));
-      });
-      marker.bindPopup('<b>' + (cycle.cycleName || 'Cycle') + '</b><br/>Owner: ' + (cycle.ownerName || 'Unknown') + '<br/>Status: ' + (isAvailable ? 'Available' : 'Rented'));
+      // Safety check for location
+      if(cycle.location && cycle.location.latitude && cycle.location.longitude) {
+        const isAvailable = cycle.status === '${CYCLE_STATUS.AVAILABLE}';
+        const marker = L.marker([cycle.location.latitude, cycle.location.longitude], {
+          icon: L.divIcon({ className: 'custom-div-icon', html: '<div class="custom-marker">' + (isAvailable ? '🚲' : '🔒') + '</div>', iconSize: [40, 40], iconAnchor: [20, 20] })
+        }).addTo(map);
+        marker.on('click', () => {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'markerClick', cycle }));
+        });
+        
+        const batteryText = cycle.battery ? '<br/>🔋 ' + cycle.battery + '%' : '';
+        marker.bindPopup('<b>' + (cycle.cycleName || 'Cycle') + '</b><br/>Owner: ' + (cycle.ownerName || 'Unknown') + '<br/>Status: ' + (isAvailable ? 'Available' : 'Rented') + batteryText);
+      }
     });
   </script>
 </body>
@@ -169,7 +198,7 @@ export default function Map() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1e40af" />
-        <Text style={styles.loadingText}>Loading map...</Text>
+        <Text style={styles.loadingText}>Loading live map...</Text>
       </View>
     );
   }
@@ -179,7 +208,7 @@ export default function Map() {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Karunya Cycle Rental</Text>
-          <Text style={styles.headerSubtitle}>Nearby cycles on campus</Text>
+          <Text style={styles.headerSubtitle}>Live IoT Map</Text>
         </View>
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={() => router.push('/my-rental')} style={styles.rentalButton}>
@@ -203,10 +232,7 @@ export default function Map() {
 
       <View style={styles.infoBanner}>
         <Text style={styles.infoText}>
-          {requestedDuration 
-            ? `${filteredCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE).length} cycle(s) available for ${Math.floor(requestedDuration / 60)}h ${requestedDuration % 60}m`
-            : `${cycles.length} cycle(s) on campus`
-          }
+          {filteredCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE).length} live cycle(s) found
         </Text>
       </View>
 
@@ -256,6 +282,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
   },
+  headerSubtitle: {
+    color: '#bfdbfe',
+    fontSize: 12,
+  },
   headerButtons: {
     flexDirection: 'row',
     gap: 8,
@@ -272,11 +302,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   logoutButton: {
-    fontSize: 14,
-    color: '#bfdbfe',
-    marginTop: 2,
-  },
-  logoutButton: {
     backgroundColor: '#3b82f6',
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -289,46 +314,6 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  markerContainer: {
-    alignItems: 'center',
-  },
-  marker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#ffffff',
-  },
-  markerAvailable: {
-    backgroundColor: '#10b981',
-  },
-  markerRented: {
-    backgroundColor: '#ef4444',
-  },
-  markerText: {
-    fontSize: 20,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 100,
-    right: 20,
-    backgroundColor: '#1e40af',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 30,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  fabText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   infoBanner: {
     position: 'absolute',
