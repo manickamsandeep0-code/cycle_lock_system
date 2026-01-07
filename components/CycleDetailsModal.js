@@ -6,6 +6,17 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
 
   const remainingTime = cycle.remainingMinutes || 0;
 
+  // Battery icon and color based on level
+  const getBatteryDisplay = (battery) => {
+    if (battery >= 60) {
+      return { icon: '🔋', color: '#10b981', label: 'Good' };
+    } else if (battery >= 30) {
+      return { icon: '🔋', color: '#f59e0b', label: 'Medium' };
+    } else {
+      return { icon: '🪫', color: '#ef4444', label: 'Low' };
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -51,7 +62,15 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
             {cycle.battery !== undefined && (
               <View style={styles.detailRow}>
                 <Text style={styles.label}>Battery</Text>
-                <Text style={styles.value}>{cycle.battery}%</Text>
+                <View style={styles.batteryRow}>
+                  <Text style={styles.batteryIcon}>{getBatteryDisplay(cycle.battery).icon}</Text>
+                  <Text style={[styles.batteryValue, { color: getBatteryDisplay(cycle.battery).color }]}>
+                    {cycle.battery}%
+                  </Text>
+                  <Text style={[styles.batteryLabel, { color: getBatteryDisplay(cycle.battery).color }]}>
+                    {getBatteryDisplay(cycle.battery).label}
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -159,6 +178,23 @@ const styles = StyleSheet.create({
   cancelButton: {
     padding: 16,
     alignItems: 'center',
+  },
+  batteryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  batteryIcon: {
+    fontSize: 20,
+  },
+  batteryValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  batteryLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'uppercase',
   },
   cancelButtonText: {
     color: '#6b7280',
