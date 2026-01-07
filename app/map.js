@@ -65,7 +65,7 @@ export default function Map() {
               ...metaData, // Name, Price, etc.
               location: { latitude: lat, longitude: lng }, // Live GPS coordinates
               status: status,
-              battery: lock.battery // Live battery level
+              battery: lock.battery !== undefined ? lock.battery : 0 // Live battery level (0 if not available)
             };
           });
 

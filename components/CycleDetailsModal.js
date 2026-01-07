@@ -59,7 +59,7 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
               <Text style={styles.value}>{formatMinutes(remainingTime)}</Text>
             </View>
 
-            {cycle.battery !== undefined && (
+            {cycle.battery !== undefined && cycle.battery !== null && (
               <View style={styles.detailRow}>
                 <Text style={styles.label}>Battery</Text>
                 <View style={styles.batteryRow}>
