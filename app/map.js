@@ -11,6 +11,7 @@ import { db, realtimeDb } from '../config/firebase';
 import { getUserData, clearUserData } from '../utils/storage';
 import { KARUNYA_LOCATION, CYCLE_STATUS } from '../constants';
 import { calculateRemainingTime } from '../utils/timeHelpers';
+import { checkAndExpireAvailability } from '../services/expirationService';
 import CycleDetailsModal from '../components/CycleDetailsModal';
 import DurationSelectionModal from '../components/DurationSelectionModal';
 
@@ -60,6 +61,13 @@ export default function Map() {
             // CRITICAL: Use Firestore status as source of truth, not ESP8266 lock state
             // Firestore status is managed by the app's rental flow
             const status = metaData.status || CYCLE_STATUS.NOT_AVAILABLE;
+
+            // Check and expire availability if time is up
+            if (metaData.id && metaData.status === CYCLE_STATUS.AVAILABLE && metaData.availableUntil) {
+              checkAndExpireAvailability(metaData.id).catch(err => 
+                console.error('Error checking availability expiration:', err)
+              );
+            }
 
             return {
               id: metaData.id || lockCode,

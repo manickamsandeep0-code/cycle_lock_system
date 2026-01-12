@@ -4,6 +4,42 @@ import { CYCLE_STATUS } from '../constants';
 import { lockCycle } from './lockService';
 import { stopLocationTracking } from './locationService';
 
+// Check if cycle availability has expired and mark as NOT_AVAILABLE
+export const checkAndExpireAvailability = async (cycleId) => {
+  try {
+    const cycleRef = doc(db, 'cycles', cycleId);
+    const cycleDoc = await getDoc(cycleRef);
+    
+    if (!cycleDoc.exists()) {
+      return false;
+    }
+    
+    const cycle = cycleDoc.data();
+    
+    // Only check AVAILABLE cycles with availableUntil set
+    if (cycle.status === CYCLE_STATUS.AVAILABLE && cycle.availableUntil) {
+      const availableUntil = new Date(cycle.availableUntil);
+      const now = new Date();
+      
+      if (now >= availableUntil) {
+        // Availability has expired - mark as NOT_AVAILABLE
+        console.log(`Availability expired for cycle ${cycleId}, marking as not available...`);
+        await updateDoc(cycleRef, {
+          status: CYCLE_STATUS.NOT_AVAILABLE,
+          availableMinutes: 0,
+          availableUntil: null
+        });
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking availability expiration:', error);
+    return false;
+  }
+};
+
 // Check if rental has expired and auto-complete it
 export const checkAndExpireRental = async (cycleId) => {
   try {
