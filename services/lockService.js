@@ -1,14 +1,14 @@
 import { ref, set, onValue, update } from 'firebase/database';
 import { realtimeDb } from '../config/firebase';
 
-// Lock Commands for Arduino
+// Lock Commands for ESP8266
 export const LOCK_COMMANDS = {
   UNLOCK: 'UNLOCK',
   LOCK: 'LOCK',
   STATUS: 'STATUS'
 };
 
-// Send unlock command to Arduino
+// Send unlock command to ESP8266
 export const unlockCycle = async (lockCode) => {
   try {
     const lockRef = ref(realtimeDb, `locks/${lockCode}/command`);
@@ -26,7 +26,7 @@ export const unlockCycle = async (lockCode) => {
   }
 };
 
-// Send lock command to Arduino
+// Send lock command to ESP8266
 export const lockCycle = async (lockCode) => {
   try {
     const lockRef = ref(realtimeDb, `locks/${lockCode}/command`);
@@ -44,7 +44,7 @@ export const lockCycle = async (lockCode) => {
   }
 };
 
-// Listen to lock status from Arduino
+// Listen to lock status from ESP8266
 export const subscribeLockStatus = (lockCode, callback) => {
   const statusRef = ref(realtimeDb, `locks/${lockCode}/status`);
   
@@ -56,7 +56,7 @@ export const subscribeLockStatus = (lockCode, callback) => {
   return unsubscribe;
 };
 
-// Update lock battery status (called by Arduino)
+// Update lock battery status (called by ESP8266)
 export const updateLockBattery = async (lockCode, batteryLevel) => {
   try {
     const lockRef = ref(realtimeDb, `locks/${lockCode}`);

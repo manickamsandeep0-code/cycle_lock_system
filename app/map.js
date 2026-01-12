@@ -52,11 +52,11 @@ export default function Map() {
             const lock = locksData[lockCode];
             const metaData = cyclesMap[lockCode] || {}; // Match using Lock ID
 
-            // If Arduino hasn't sent location yet, fallback to fixed location or defaults
+            // If ESP8266 hasn't sent location yet, fallback to fixed location or defaults
             const lat = lock.location?.latitude || metaData.location?.latitude || KARUNYA_LOCATION.latitude;
             const lng = lock.location?.longitude || metaData.location?.longitude || KARUNYA_LOCATION.longitude;
             
-            // CRITICAL: Use Firestore status as source of truth, not Arduino lock state
+            // CRITICAL: Use Firestore status as source of truth, not ESP8266 lock state
             // Firestore status is managed by the app's rental flow
             const status = metaData.status || CYCLE_STATUS.NOT_AVAILABLE;
 
@@ -154,7 +154,7 @@ export default function Map() {
     const cyclesJSON = JSON.stringify(filteredCycles || []);
     const userLocationJSON = JSON.stringify(userLocation || null);
     
-    // Note: We use the cycle.location.latitude provided by the Arduino
+    // Note: We use the cycle.location.latitude provided by the ESP8266
     return `
 <!DOCTYPE html>
 <html>
