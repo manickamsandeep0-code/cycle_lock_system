@@ -222,6 +222,7 @@ export default function Map() {
 
       <WebView
         ref={webViewRef}
+        key={`map-${filteredCycles.length}-${JSON.stringify(filteredCycles.map(c => c.location))}`}
         style={styles.map}
         originWhitelist={['*']}
         source={{ html: generateMapHTML() }}

@@ -13,6 +13,7 @@ export default function OwnerDashboard() {
   const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [batteryLevels, setBatteryLevels] = useState({});
+  const [liveLocations, setLiveLocations] = useState({});
 
   useEffect(() => {
     loadUserAndCycles();
@@ -32,11 +33,12 @@ export default function OwnerDashboard() {
         }));
         setCycles(cyclesList);
         
-        // Listen to battery updates for each cycle
+        // Listen to battery and location updates for each cycle
         cyclesList.forEach(cycle => {
           // Use lockCode if available, otherwise use lockCode (for backward compatibility)
           const lockCodeentifier = cycle.lockCode || cycle.lockCode;
           if (lockCodeentifier) {
+            // Listen to battery updates
             const batteryRef = ref(realtimeDb, `/locks/${lockCodeentifier}/battery`);
             onValue(batteryRef, (snapshot) => {
               const battery = snapshot.val();
@@ -44,6 +46,18 @@ export default function OwnerDashboard() {
                 ...prev,
                 [lockCodeentifier]: battery
               }));
+            });
+
+            // Listen to location updates
+            const locationRef = ref(realtimeDb, `/locks/${lockCodeentifier}/location`);
+            onValue(locationRef, (snapshot) => {
+              const location = snapshot.val();
+              if (location) {
+                setLiveLocations(prev => ({
+                  ...prev,
+                  [lockCodeentifier]: location
+                }));
+              }
             });
           }
         });
@@ -163,7 +177,9 @@ export default function OwnerDashboard() {
         <View style={styles.cycleInfo}>
           <Text style={styles.infoLabel}>Location:</Text>
           <Text style={styles.infoValue}>
-            {cycle.location ? 
+            {liveLocations[lockCodeentifier] ? 
+              `${liveLocations[lockCodeentifier].latitude.toFixed(4)}, ${liveLocations[lockCodeentifier].longitude.toFixed(4)}` 
+              : cycle.location ? 
               `${cycle.location.latitude.toFixed(4)}, ${cycle.location.longitude.toFixed(4)}` 
               : 'Unknown'}
           </Text>
