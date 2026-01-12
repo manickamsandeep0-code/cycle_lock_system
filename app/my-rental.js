@@ -166,10 +166,10 @@ export default function MyRental() {
         autoCompleted: false
       });
 
-      // Step 4: Update cycle status
+      // Step 4: Update cycle status back to available
       const cycleRef = doc(db, 'cycles', rental.id);
       await updateDoc(cycleRef, {
-        status: CYCLE_STATUS.NOT_AVAILABLE,
+        status: CYCLE_STATUS.AVAILABLE,
         currentRenter: null,
         currentRenterName: null,
         currentRenterPhone: null,
