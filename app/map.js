@@ -90,12 +90,14 @@ export default function Map() {
   }, [requestedDuration]);
 
   const filterCycles = (allCycles, duration) => {
+    // Always show only AVAILABLE cycles on the map
+    const available = allCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE);
+    
     if (duration !== null) {
-      // Logic: You can filter by battery life required for duration if needed
-      const available = allCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE);
+      // Additional filtering by battery life or duration can be added here
       setFilteredCycles(available);
     } else {
-      setFilteredCycles(allCycles);
+      setFilteredCycles(available);
     }
   };
 
