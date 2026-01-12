@@ -1,44 +1,30 @@
-/*
- * Cycle Lock System - Arduino Code
- * Hardware: Arduino Uno/Nano, SIM800L GSM Module, Neo 6M GPS Module, Relay for Solenoid Lock
- * 
- * Connections:
- * SIM800L: RX -> Pin 10, TX -> Pin 11
- * GPS: RX -> Pin 4, TX -> Pin 3
- * Relay: Signal -> Pin 7
- */
 
+
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <SoftwareSerial.h>
 #include <TinyGPS++.h>
 
-// Pin definitions
-#define GSM_RX 10
-#define GSM_TX 11
-#define GPS_RX 4
-#define GPS_TX 3
-#define RELAY_PIN 7
+// Pin definitions for ESP8266 NodeMCU
+#define GPS_RX D2  // GPIO4
+#define GPS_TX D1  // GPIO5
+#define RELAY_PIN D7  // GPIO13
 
 // Configuration - IMPORTANT: UPDATE THESE VALUES!
+const char* WIFI_SSID = "YourWiFiName";     // ← CHANGE THIS to your WiFi name
+const char* WIFI_PASSWORD = "YourWiFiPassword";  // ← CHANGE THIS to your WiFi password
 const char* LOCK_ID = "LOCK_0002";  // CHANGE THIS TO YOUR UNIQUE LOCK ID (must match Firestore)
-
-// APN Settings - Choose based on your SIM card provider:
-// Airtel:  "airtelgprs.com"
-// Jio:     "jionet"
-// Vi:      "www"
-// BSNL:    "bsnlnet"
-const char* APN = "airtelgprs.com";  // ← CHANGE THIS to your network's APN
-const char* APN_USER = "";           // Usually empty for Indian networks
-const char* APN_PASS = "";           // Usually empty for Indian networks
 
 const char* FIREBASE_HOST = "karunya-cycle-rental-default-rtdb.asia-southeast1.firebasedatabase.app";  // Firebase Realtime Database URL (REGION SPECIFIC)
 const char* FIREBASE_AUTH = "NvdR1aTYQz1TL6oVb1HgpXVZ5nRCTnYsESVToYbl";      // Your Firebase Database Secret
 const int UPDATE_INTERVAL = 10000;   // Send location every 10 seconds (10000ms)
 
-// Software Serial for GSM and GPS
-SoftwareSerial gsmSerial(GSM_RX, GSM_TX);
+// Software Serial for GPS
 SoftwareSerial gpsSerial(GPS_RX, GPS_TX);
 
 TinyGPSPlus gps;
+WiFiClientSecure wifiClient;
 
 // Global variables
 double latitude = 0.0;
@@ -47,8 +33,7 @@ String lockStatus = "LOCKED";
 unsigned long lastUpdate = 0;
 
 void setup() {
-  Serial.begin(9600);
-  gsmSerial.begin(9600);
+  Serial.begin(115200);
   gpsSerial.begin(9600);
   
   pinMode(RELAY_PIN, OUTPUT);
@@ -56,8 +41,11 @@ void setup() {
   
   Serial.println(F("Cycle Lock System Starting..."));
   
-  // Initialize GSM Module
-  initGSM();
+  // Initialize WiFi
+  initWiFi();
+  
+  // Disable SSL certificate verification (for Firebase)
+  wifiClient.setInsecure();
   
   Serial.println(F("System Ready!"));
 }
@@ -86,63 +74,48 @@ void loop() {
   }
 }
 
-void initGSM() {
-  Serial.println(F("Initializing GSM..."));
+void initWiFi() {
+  Serial.println(F("Connecting to WiFi..."));
+  Serial.print(F("SSID: "));
+  Serial.println(WIFI_SSID);
   
-  // Test AT command
-  sendATCommand("AT", 1000);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
-  // Disable echo
-  sendATCommand("ATE0", 1000);
-  
-  // Set SMS mode to text
-  sendATCommand("AT+CMGF=1", 1000);
-  
-  // Configure GPRS
-  Serial.println(F("Configuring GPRS..."));
-  sendATCommand("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\"", 2000);
-  
-  String apnCmd = "AT+SAPBR=3,1,\"APN\",\"" + String(APN) + "\"";
-  sendATCommand(apnCmd.c_str(), 2000);
-  
-  // Open GPRS context
-  sendATCommand("AT+SAPBR=1,1", 3000);
-  
-  // Check IP address
-  sendATCommand("AT+SAPBR=2,1", 2000);
-  
-  // Initialize HTTP service
-  sendATCommand("AT+HTTPINIT", 2000);
-  
-  Serial.println(F("GSM Initialized!"));
-}
-
-void sendATCommand(const char* cmd, int timeout) {
-  Serial.print(F("Sending: "));
-  Serial.println(cmd);
-  
-  gsmSerial.println(cmd);
-  
-  long start = millis();
-  while (millis() - start < timeout) {
-    while (gsmSerial.available()) {
-      char c = gsmSerial.read();
-      Serial.write(c);
-    }
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
   }
-  Serial.println();
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println(F("\nWiFi Connected!"));
+    Serial.print(F("IP Address: "));
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println(F("\nWiFi Connection Failed!"));
+    Serial.println(F("Retrying in 5 seconds..."));
+    delay(5000);
+    ESP.restart();
+  }
 }
 
 void sendLocationUpdate() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(F("WiFi not connected. Reconnecting..."));
+    initWiFi();
+    return;
+  }
+  
   Serial.println(F("Sending location update..."));
+  
+  HTTPClient http;
   
   // Prepare JSON data
   String jsonData = "{";
-  jsonData += "\"lockId\":\"" + String(LOCK_ID) + "\",";
   jsonData += "\"latitude\":" + String(latitude, 6) + ",";
-  jsonData += "\"longitude\":" + String(longitude, 6) + ",";
-  jsonData += "\"lockStatus\":\"" + lockStatus + "\",";
-  jsonData += "\"timestamp\":\"" + String(millis()) + "\"";
+  jsonData += "\"longitude\":" + String(longitude, 6);
   jsonData += "}";
   
   // Firebase path: /locks/{LOCK_ID}/location.json with auth
@@ -151,33 +124,34 @@ void sendLocationUpdate() {
     url += "?auth=" + String(FIREBASE_AUTH);
   }
   
-  // Set HTTP parameters
-  sendATCommand("AT+HTTPPARA=\"CID\",1", 1000);
+  http.begin(wifiClient, url);
+  http.addHeader("Content-Type", "application/json");
   
-  String urlCmd = "AT+HTTPPARA=\"URL\",\"" + url + "\"";
-  sendATCommand(urlCmd.c_str(), 1000);
+  int httpCode = http.PUT(jsonData);  // Use PUT to update location
   
-  sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 1000);
+  if (httpCode > 0) {
+    Serial.print(F("HTTP Response: "));
+    Serial.println(httpCode);
+    
+    if (httpCode == 200) {
+      Serial.println(F("Location update sent!"));
+    }
+  } else {
+    Serial.print(F("HTTP Error: "));
+    Serial.println(http.errorToString(httpCode));
+  }
   
-  // Set data to send
-  String dataCmd = "AT+HTTPDATA=" + String(jsonData.length()) + ",10000";
-  gsmSerial.println(dataCmd);
-  delay(1000);
-  gsmSerial.println(jsonData);
-  delay(2000);
-  
-  // Execute POST request
-  sendATCommand("AT+HTTPACTION=1", 5000);  // 1 = POST
-  
-  // Read response
-  delay(2000);
-  sendATCommand("AT+HTTPREAD", 2000);
-  
-  Serial.println(F("Location update sent!"));
+  http.end();
 }
 
 void checkUnlockRequest() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+  
   Serial.println(F("Checking for unlock request..."));
+  
+  HTTPClient http;
   
   // Firebase path to check command: /locks/{LOCK_ID}/command.json
   String url = "https://" + String(FIREBASE_HOST) + "/locks/" + String(LOCK_ID) + "/command.json";
@@ -185,37 +159,27 @@ void checkUnlockRequest() {
     url += "?auth=" + String(FIREBASE_AUTH);
   }
   
-  // Set HTTP parameters for GET request
-  sendATCommand("AT+HTTPPARA=\"CID\",1", 1000);
+  http.begin(wifiClient, url);
   
-  String urlCmd = "AT+HTTPPARA=\"URL\",\"" + url + "\"";
-  sendATCommand(urlCmd.c_str(), 1000);
+  int httpCode = http.GET();
   
-  // Execute GET request
-  gsmSerial.println("AT+HTTPACTION=0");  // 0 = GET
-  delay(3000);
-  
-  // Read response
-  gsmSerial.println("AT+HTTPREAD");
-  delay(2000);
-  
-  String response = "";
-  while (gsmSerial.available()) {
-    char c = gsmSerial.read();
-    response += c;
-    Serial.write(c);
+  if (httpCode == 200) {
+    String response = http.getString();
+    Serial.println(response);
+    
+    // Check if response contains "UNLOCK" command and executed is false
+    if (response.indexOf("\"action\":\"UNLOCK\"") > 0 && response.indexOf("\"executed\":false") > 0) {
+      Serial.println(F("\n*** UNLOCK REQUEST RECEIVED ***"));
+      unlockCycle();
+      markCommandExecuted();
+    } else if (response.indexOf("\"action\":\"LOCK\"") > 0 && response.indexOf("\"executed\":false") > 0) {
+      Serial.println(F("\n*** LOCK REQUEST RECEIVED ***"));
+      lockCycle();
+      markCommandExecuted();
+    }
   }
   
-  // Check if response contains "UNLOCK" command and executed is false
-  if (response.indexOf("\"action\":\"UNLOCK\"") > 0 && response.indexOf("\"executed\":false") > 0) {
-    Serial.println(F("\n*** UNLOCK REQUEST RECEIVED ***"));
-    unlockCycle();
-    markCommandExecuted();
-  } else if (response.indexOf("\"action\":\"LOCK\"") > 0 && response.indexOf("\"executed\":false") > 0) {
-    Serial.println(F("\n*** LOCK REQUEST RECEIVED ***"));
-    lockCycle();
-    markCommandExecuted();
-  }
+  http.end();
 }
 
 void unlockCycle() {
@@ -247,7 +211,13 @@ void lockCycle() {
 }
 
 void updateLockStatus(String status) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+  
   Serial.println(F("Updating lock status..."));
+  
+  HTTPClient http;
   
   // Update status as JSON object: {"locked": true/false, "online": true}
   String jsonData = "{\"locked\":";
@@ -259,29 +229,29 @@ void updateLockStatus(String status) {
     url += "?auth=" + String(FIREBASE_AUTH);
   }
   
-  sendATCommand("AT+HTTPPARA=\"CID\",1", 1000);
+  http.begin(wifiClient, url);
+  http.addHeader("Content-Type", "application/json");
   
-  String urlCmd = "AT+HTTPPARA=\"URL\",\"" + url + "\"";
-  sendATCommand(urlCmd.c_str(), 1000);
+  int httpCode = http.PUT(jsonData);
   
-  sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 1000);
+  if (httpCode == 200) {
+    Serial.println(F("Status updated!"));
+  } else {
+    Serial.print(F("Status update failed: "));
+    Serial.println(httpCode);
+  }
   
-  String dataCmd = "AT+HTTPDATA=" + String(jsonData.length()) + ",10000";
-  gsmSerial.println(dataCmd);
-  delay(1000);
-  gsmSerial.println(jsonData);
-  delay(2000);
-  
-  sendATCommand("AT+HTTPACTION=1", 5000);  // POST
-  
-  delay(2000);
-  sendATCommand("AT+HTTPREAD", 2000);
-  
-  Serial.println(F("Status updated!"));
+  http.end();
 }
 
 void markCommandExecuted() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+  
   Serial.println(F("Marking command as executed..."));
+  
+  HTTPClient http;
   
   // Update command/executed to true
   String jsonData = "true";
@@ -291,23 +261,17 @@ void markCommandExecuted() {
     url += "?auth=" + String(FIREBASE_AUTH);
   }
   
-  sendATCommand("AT+HTTPPARA=\"CID\",1", 1000);
+  http.begin(wifiClient, url);
+  http.addHeader("Content-Type", "application/json");
   
-  String urlCmd = "AT+HTTPPARA=\"URL\",\"" + url + "\"";
-  sendATCommand(urlCmd.c_str(), 1000);
+  int httpCode = http.PUT(jsonData);
   
-  sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 1000);
+  if (httpCode == 200) {
+    Serial.println(F("Command marked as executed!"));
+  } else {
+    Serial.print(F("Failed to mark command: "));
+    Serial.println(httpCode);
+  }
   
-  String dataCmd = "AT+HTTPDATA=" + String(jsonData.length()) + ",10000";
-  gsmSerial.println(dataCmd);
-  delay(1000);
-  gsmSerial.println(jsonData);
-  delay(2000);
-  
-  sendATCommand("AT+HTTPACTION=1", 5000);  // POST
-  
-  delay(2000);
-  sendATCommand("AT+HTTPREAD", 2000);
-  
-  Serial.println(F("Command marked as executed!"));
+  http.end();
 }

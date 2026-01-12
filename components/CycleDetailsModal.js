@@ -59,9 +59,9 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
               <Text style={styles.value}>{formatMinutes(remainingTime)}</Text>
             </View>
 
-            {cycle.battery !== undefined && cycle.battery !== null && (
-              <View style={styles.detailRow}>
-                <Text style={styles.label}>Battery</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.label}>Battery</Text>
+              {cycle.battery !== undefined && cycle.battery !== null ? (
                 <View style={styles.batteryRow}>
                   <Text style={styles.batteryIcon}>{getBatteryDisplay(cycle.battery).icon}</Text>
                   <Text style={[styles.batteryValue, { color: getBatteryDisplay(cycle.battery).color }]}>
@@ -71,8 +71,10 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
                     {getBatteryDisplay(cycle.battery).label}
                   </Text>
                 </View>
-              </View>
-            )}
+              ) : (
+                <Text style={styles.value}>Not Available</Text>
+              )}
+            </View>
 
             <View style={styles.statusContainer}>
               <View style={[styles.statusBadge, styles.statusAvailable]}>
