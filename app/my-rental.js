@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { collection, query, where, getDocs, doc, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { ref, onValue } from 'firebase/database';
+import { db, realtimeDb } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
 import { lockCycle } from '../services/lockService';
@@ -20,6 +21,7 @@ export default function MyRental() {
   const [review, setReview] = useState('');
   const [geofenceWarning, setGeofenceWarning] = useState(null);
   const [expirationCheckInterval, setExpirationCheckInterval] = useState(null);
+  const [batteryLevel, setBatteryLevel] = useState(null);
 
   useEffect(() => {
     loadActiveRental();
@@ -86,7 +88,17 @@ export default function MyRental() {
 
       if (!querySnapshot.empty) {
         const cycleDoc = querySnapshot.docs[0];
-        setRental({ id: cycleDoc.id, ...cycleDoc.data() });
+        const rentalData = { id: cycleDoc.id, ...cycleDoc.data() };
+        setRental(rentalData);
+        
+        // Listen to battery updates from Realtime Database
+        if (rentalData.lockId) {
+          const batteryRef = ref(realtimeDb, `/locks/${rentalData.lockId}/battery`);
+          onValue(batteryRef, (snapshot) => {
+            const battery = snapshot.val();
+            setBatteryLevel(battery);
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading rental:', error);
@@ -279,6 +291,23 @@ export default function MyRental() {
               {new Date(rental.rentedAt).toLocaleTimeString()}
             </Text>
           </View>
+
+          {batteryLevel !== null && batteryLevel !== undefined && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Battery:</Text>
+              <View style={styles.batteryRow}>
+                <Text style={styles.batteryIcon}>
+                  {batteryLevel >= 60 ? '🔋' : batteryLevel >= 30 ? '🔋' : '🪫'}
+                </Text>
+                <Text style={[
+                  styles.batteryValue,
+                  { color: batteryLevel >= 60 ? '#10b981' : batteryLevel >= 30 ? '#f59e0b' : '#ef4444' }
+                ]}>
+                  {batteryLevel}%
+                </Text>
+              </View>
+            </View>
+          )}
 
           <View style={styles.timeBox}>
             <Text style={styles.timeText}>{timeRemaining()}</Text>
@@ -477,6 +506,18 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginBottom: 12,
+  },
+  batteryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  batteryIcon: {
+    fontSize: 18,
+  },
+  batteryValue: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   reportButtonText: {
     color: '#f59e0b',

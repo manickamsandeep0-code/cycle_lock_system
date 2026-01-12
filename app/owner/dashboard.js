@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { ref, onValue } from 'firebase/database';
+import { db, realtimeDb } from '../../config/firebase';
 import { getUserData, clearUserData } from '../../utils/storage';
 import { CYCLE_STATUS } from '../../constants';
 
@@ -11,6 +12,7 @@ export default function OwnerDashboard() {
   const [user, setUser] = useState(null);
   const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [batteryLevels, setBatteryLevels] = useState({});
 
   useEffect(() => {
     loadUserAndCycles();
@@ -29,6 +31,20 @@ export default function OwnerDashboard() {
           ...doc.data()
         }));
         setCycles(cyclesList);
+        
+        // Listen to battery updates for each cycle
+        cyclesList.forEach(cycle => {
+          if (cycle.lockId) {
+            const batteryRef = ref(realtimeDb, `/locks/${cycle.lockId}/battery`);
+            onValue(batteryRef, (snapshot) => {
+              const battery = snapshot.val();
+              setBatteryLevels(prev => ({
+                ...prev,
+                [cycle.lockId]: battery
+              }));
+            });
+          }
+        });
       });
 
       return unsubscribe;
@@ -149,6 +165,23 @@ export default function OwnerDashboard() {
               : 'Unknown'}
           </Text>
         </View>
+
+        {batteryLevels[cycle.lockId] !== undefined && batteryLevels[cycle.lockId] !== null && (
+          <View style={styles.cycleInfo}>
+            <Text style={styles.infoLabel}>Battery:</Text>
+            <View style={styles.batteryRow}>
+              <Text style={styles.batteryIcon}>
+                {batteryLevels[cycle.lockId] >= 60 ? '🔋' : batteryLevels[cycle.lockId] >= 30 ? '🔋' : '🪫'}
+              </Text>
+              <Text style={[
+                styles.batteryValue,
+                { color: batteryLevels[cycle.lockId] >= 60 ? '#10b981' : batteryLevels[cycle.lockId] >= 30 ? '#f59e0b' : '#ef4444' }
+              ]}>
+                {batteryLevels[cycle.lockId]}%
+              </Text>
+            </View>
+          </View>
+        )}
 
         {cycle.isOnline ? (
           <View style={styles.onlineBadge}>
@@ -543,6 +576,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#991b1b',
+  },
+  batteryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  batteryIcon: {
+    fontSize: 18,
+  },
+  batteryValue: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   actionButtons: {
     gap: 8,
