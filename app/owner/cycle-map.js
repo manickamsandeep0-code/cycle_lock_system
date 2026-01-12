@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { ref, onValue } from 'firebase/database';
+import { db, realtimeDb } from '../../config/firebase';
 import { KARUNYA_LOCATION } from '../../constants';
 
 export default function CycleMap() {
@@ -13,22 +14,41 @@ export default function CycleMap() {
   
   const [cycleLocation, setCycleLocation] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lockCode, setLockCode] = useState(null);
 
   useEffect(() => {
     if (!cycleId) return;
 
-    // Listen to real-time location updates
-    const cycleRef = doc(db, 'cycles', cycleId);
-    const unsubscribe = onSnapshot(cycleRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setCycleLocation(data.location);
+    // First, get the lockCode from Firestore
+    const fetchLockCode = async () => {
+      const cycleRef = doc(db, 'cycles', cycleId);
+      const cycleDoc = await getDoc(cycleRef);
+      if (cycleDoc.exists()) {
+        const data = cycleDoc.data();
+        setLockCode(data.lockCode);
+        // Set initial location from Firestore as fallback
+        setCycleLocation(data.location || KARUNYA_LOCATION);
         setLoading(false);
+      }
+    };
+
+    fetchLockCode();
+  }, [cycleId]);
+
+  // Listen to live location updates from Realtime Database
+  useEffect(() => {
+    if (!lockCode) return;
+
+    const locationRef = ref(realtimeDb, `/locks/${lockCode}/location`);
+    const unsubscribe = onValue(locationRef, (snapshot) => {
+      const location = snapshot.val();
+      if (location) {
+        setCycleLocation(location);
       }
     });
 
     return () => unsubscribe();
-  }, [cycleId]);
+  }, [lockCode]);
 
   const generateMapHTML = () => {
     const location = cycleLocation || KARUNYA_LOCATION;
@@ -80,8 +100,11 @@ export default function CycleMap() {
   return (
     <View style={styles.container}>
       <WebView
+        key={cycleLocation ? `${cycleLocation.latitude}-${cycleLocation.longitude}` : 'default'}
         source={{ html: generateMapHTML() }}
         style={styles.map}
+        javaScriptEnabled
+        domStorageEnabled
       />
       <TouchableOpacity 
         style={styles.backButton}
