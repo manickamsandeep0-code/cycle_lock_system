@@ -74,6 +74,18 @@ export default function MyRental() {
     }
   }, [rental]);
 
+  // Store battery listener unsubscribe function
+  const [batteryUnsubscribe, setBatteryUnsubscribe] = useState(null);
+
+  // Cleanup battery listener on unmount
+  useEffect(() => {
+    return () => {
+      if (batteryUnsubscribe) {
+        batteryUnsubscribe();
+      }
+    };
+  }, [batteryUnsubscribe]);
+
   const loadActiveRental = async () => {
     try {
       const user = await getUserData();
@@ -94,10 +106,11 @@ export default function MyRental() {
         // Listen to battery updates from Realtime Database
         if (rentalData.lockCode) {
           const batteryRef = ref(realtimeDb, `/locks/${rentalData.lockCode}/battery`);
-          onValue(batteryRef, (snapshot) => {
+          const unsub = onValue(batteryRef, (snapshot) => {
             const battery = snapshot.val();
             setBatteryLevel(battery);
           });
+          setBatteryUnsubscribe(() => unsub);
         }
       }
     } catch (error) {

@@ -18,6 +18,10 @@ export default function OwnerDashboard() {
   useEffect(() => {
     loadUserAndCycles();
     
+    // Store unsubscribe functions for cleanup
+    let firestoreUnsubscribe = null;
+    const realtimeUnsubscribes = [];
+    
     // Set up real-time listener for cycles
     const setupRealtimeListener = async () => {
       const userData = await getUserData();
@@ -26,50 +30,55 @@ export default function OwnerDashboard() {
       const cyclesRef = collection(db, 'cycles');
       const q = query(cyclesRef, where('ownerId', '==', userData.id));
       
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      firestoreUnsubscribe = onSnapshot(q, (querySnapshot) => {
         const cyclesList = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         setCycles(cyclesList);
         
+        // Clear previous realtime listeners before setting up new ones
+        realtimeUnsubscribes.forEach(unsub => unsub());
+        realtimeUnsubscribes.length = 0;
+        
         // Listen to battery and location updates for each cycle
         cyclesList.forEach(cycle => {
-          // Use lockCode if available, otherwise use lockCode (for backward compatibility)
-          const lockCodeentifier = cycle.lockCode || cycle.lockCode;
-          if (lockCodeentifier) {
+          const lockIdentifier = cycle.lockCode;
+          if (lockIdentifier) {
             // Listen to battery updates
-            const batteryRef = ref(realtimeDb, `/locks/${lockCodeentifier}/battery`);
-            onValue(batteryRef, (snapshot) => {
+            const batteryRef = ref(realtimeDb, `/locks/${lockIdentifier}/battery`);
+            const batteryUnsub = onValue(batteryRef, (snapshot) => {
               const battery = snapshot.val();
               setBatteryLevels(prev => ({
                 ...prev,
-                [lockCodeentifier]: battery
+                [lockIdentifier]: battery
               }));
             });
+            realtimeUnsubscribes.push(batteryUnsub);
 
             // Listen to location updates
-            const locationRef = ref(realtimeDb, `/locks/${lockCodeentifier}/location`);
-            onValue(locationRef, (snapshot) => {
+            const locationRef = ref(realtimeDb, `/locks/${lockIdentifier}/location`);
+            const locationUnsub = onValue(locationRef, (snapshot) => {
               const location = snapshot.val();
               if (location) {
                 setLiveLocations(prev => ({
                   ...prev,
-                  [lockCodeentifier]: location
+                  [lockIdentifier]: location
                 }));
               }
             });
+            realtimeUnsubscribes.push(locationUnsub);
           }
         });
       });
-
-      return unsubscribe;
     };
 
-    const unsubscribePromise = setupRealtimeListener();
+    setupRealtimeListener();
     
+    // Cleanup function
     return () => {
-      unsubscribePromise.then(unsub => unsub && unsub());
+      if (firestoreUnsubscribe) firestoreUnsubscribe();
+      realtimeUnsubscribes.forEach(unsub => unsub());
     };
   }, []);
 
@@ -151,7 +160,7 @@ export default function OwnerDashboard() {
   const renderCycleCard = (cycle) => {
     const isAvailable = cycle.status === CYCLE_STATUS.AVAILABLE;
     const isRented = cycle.status === CYCLE_STATUS.RENTED;
-    const lockCodeentifier = cycle.lockCode || cycle.lockCode; // Use lockCode or lockCode
+    const lockIdentifier = cycle.lockCode;
 
     return (
       <View key={cycle.id} style={styles.cycleCard}>
@@ -171,32 +180,32 @@ export default function OwnerDashboard() {
 
         <View style={styles.cycleInfo}>
           <Text style={styles.infoLabel}>Lock Code:</Text>
-          <Text style={styles.infoValue}>{lockCodeentifier}</Text>
+          <Text style={styles.infoValue}>{lockIdentifier}</Text>
         </View>
 
         <View style={styles.cycleInfo}>
           <Text style={styles.infoLabel}>Location:</Text>
           <Text style={styles.infoValue}>
-            {liveLocations[lockCodeentifier] ? 
-              `${liveLocations[lockCodeentifier].latitude.toFixed(4)}, ${liveLocations[lockCodeentifier].longitude.toFixed(4)}` 
+            {liveLocations[lockIdentifier] ? 
+              `${liveLocations[lockIdentifier].latitude.toFixed(4)}, ${liveLocations[lockIdentifier].longitude.toFixed(4)}` 
               : cycle.location ? 
               `${cycle.location.latitude.toFixed(4)}, ${cycle.location.longitude.toFixed(4)}` 
               : 'Unknown'}
           </Text>
         </View>
 
-        {batteryLevels[lockCodeentifier] !== undefined && batteryLevels[lockCodeentifier] !== null && (
+        {batteryLevels[lockIdentifier] !== undefined && batteryLevels[lockIdentifier] !== null && (
           <View style={styles.cycleInfo}>
             <Text style={styles.infoLabel}>Battery:</Text>
             <View style={styles.batteryRow}>
               <Text style={styles.batteryIcon}>
-                {batteryLevels[lockCodeentifier] >= 60 ? '🔋' : batteryLevels[lockCodeentifier] >= 30 ? '🔋' : '🪫'}
+                {batteryLevels[lockIdentifier] >= 60 ? '🔋' : batteryLevels[lockIdentifier] >= 30 ? '🔋' : '🪫'}
               </Text>
               <Text style={[
                 styles.batteryValue,
-                { color: batteryLevels[lockCodeentifier] >= 60 ? '#10b981' : batteryLevels[lockCodeentifier] >= 30 ? '#f59e0b' : '#ef4444' }
+                { color: batteryLevels[lockIdentifier] >= 60 ? '#10b981' : batteryLevels[lockIdentifier] >= 30 ? '#f59e0b' : '#ef4444' }
               ]}>
-                {batteryLevels[lockCodeentifier]}%
+                {batteryLevels[lockIdentifier]}%
               </Text>
             </View>
           </View>

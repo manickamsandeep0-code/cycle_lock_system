@@ -31,6 +31,8 @@ export default function Map() {
 
   // --- CRITICAL FIX: Listen to Realtime Database for Live Location ---
   useEffect(() => {
+    let unsubscribeRealtime = null;
+    
     const fetchCycles = async () => {
       try {
         // 1. Get static cycle details (Name, Price, Owner) from Firestore
@@ -42,7 +44,7 @@ export default function Map() {
 
         // 2. Listen to LIVE data (Location, Status) from Realtime Database
         const locksRef = ref(realtimeDb, 'locks');
-        const unsubscribe = onValue(locksRef, (snapshot) => {
+        unsubscribeRealtime = onValue(locksRef, (snapshot) => {
           const locksData = snapshot.val();
           if (!locksData) return;
 
@@ -73,8 +75,6 @@ export default function Map() {
           filterCycles(mergedData, requestedDuration);
           setLoading(false);
         });
-
-        return () => unsubscribe();
       } catch (err) {
         console.error('Error fetching cycles:', err);
         setLoading(false);
@@ -82,6 +82,11 @@ export default function Map() {
     };
 
     fetchCycles();
+    
+    // Cleanup function
+    return () => {
+      if (unsubscribeRealtime) unsubscribeRealtime();
+    };
   }, [requestedDuration]);
 
   const filterCycles = (allCycles, duration) => {

@@ -5,11 +5,13 @@ import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { ref, set } from 'firebase/database';
 import { db, realtimeDb } from '../config/firebase';
 import { getUserData } from '../utils/storage';
+import { CYCLE_STATUS } from '../constants';
 
 export default function RentCycle() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const cycle = JSON.parse(params.cycle);
+  const requestedDuration = params.requestedDuration ? parseInt(params.requestedDuration) : 60;
   
   const [loading, setLoading] = useState(false);
 
@@ -23,16 +25,32 @@ export default function RentCycle() {
         return;
       }
 
-      // Write unlock command to Realtime Database
+      // Step 1: Update cycle status in Firestore
+      const cycleRef = doc(db, 'cycles', cycle.id);
+      const rentalEndTime = new Date();
+      rentalEndTime.setMinutes(rentalEndTime.getMinutes() + requestedDuration);
+      
+      await updateDoc(cycleRef, {
+        status: CYCLE_STATUS.RENTED,
+        currentRenter: user.id,
+        currentRenterName: user.name,
+        currentRenterPhone: user.phoneNumber,
+        rentedAt: new Date().toISOString(),
+        rentalDuration: requestedDuration,
+        rentalEndTime: rentalEndTime.toISOString()
+      });
+
+      // Step 2: Write unlock command to Realtime Database
       const commandRef = ref(realtimeDb, `/locks/${cycle.lockCode}/command`);
       await set(commandRef, {
         action: "UNLOCK",
         executed: false,
+        timestamp: Date.now()
       });
 
       Alert.alert(
         'Success!',
-        `Unlock command sent to ${cycle.cycleName || cycle.lockCode}!`,
+        `Cycle unlocked! You have ${requestedDuration} minutes to ride.`,
         [{ text: 'OK', onPress: () => router.replace('/my-rental') }]
       );
     } catch (error) {
