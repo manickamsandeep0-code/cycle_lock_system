@@ -10,6 +10,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db, realtimeDb } from '../config/firebase'; 
 import { getUserData, clearUserData } from '../utils/storage';
 import { KARUNYA_LOCATION, CYCLE_STATUS } from '../constants';
+import { calculateRemainingTime } from '../utils/timeHelpers';
 import CycleDetailsModal from '../components/CycleDetailsModal';
 import DurationSelectionModal from '../components/DurationSelectionModal';
 
@@ -90,14 +91,23 @@ export default function Map() {
 
   const filterCycles = (allCycles, duration) => {
     // Always show only AVAILABLE cycles on the map
-    const available = allCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE);
+    let available = allCycles.filter(c => c.status === CYCLE_STATUS.AVAILABLE);
     
-    if (duration !== null) {
-      // Additional filtering by battery life or duration can be added here
-      setFilteredCycles(available);
-    } else {
-      setFilteredCycles(available);
+    // If user selected a rental duration, filter by availability time
+    if (duration !== null && duration > 0) {
+      available = available.filter(cycle => {
+        // Calculate remaining availability time for the cycle
+        const remainingMinutes = calculateRemainingTime(cycle);
+        
+        // If cycle has no availability limit (availableUntil not set), show it
+        if (!cycle.availableUntil) return true;
+        
+        // Only show cycles with enough remaining time
+        return remainingMinutes >= duration;
+      });
     }
+    
+    setFilteredCycles(available);
   };
 
   const loadUserData = async () => {
