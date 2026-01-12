@@ -160,7 +160,7 @@ export default function MyRental() {
         rentedAt: rental.rentedAt,
         completedAt: new Date().toISOString(),
         duration: rental.rentalDuration,
-        price: rental.rentalPrice,
+        price: rental.rentalPrice || 0,
         rating: rating,
         review: review,
         autoCompleted: false

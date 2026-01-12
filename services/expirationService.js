@@ -53,7 +53,7 @@ const completeExpiredRental = async (cycleId, cycle) => {
       renterName: cycle.currentRenterName,
       renterPhone: cycle.currentRenterPhone,
       rentalDuration: cycle.rentalDuration,
-      rentalPrice: cycle.rentalPrice,
+      rentalPrice: cycle.rentalPrice || 0,
       rentedAt: cycle.rentedAt,
       completedAt: new Date().toISOString(),
       autoCompleted: true,

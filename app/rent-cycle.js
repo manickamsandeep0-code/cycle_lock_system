@@ -30,6 +30,10 @@ export default function RentCycle() {
       const rentalEndTime = new Date();
       rentalEndTime.setMinutes(rentalEndTime.getMinutes() + requestedDuration);
       
+      // Calculate rental price (you can adjust the rate)
+      const pricePerHour = 10; // ₹10 per hour
+      const rentalPrice = Math.ceil((requestedDuration / 60) * pricePerHour);
+      
       await updateDoc(cycleRef, {
         status: CYCLE_STATUS.RENTED,
         currentRenter: user.id,
@@ -37,6 +41,7 @@ export default function RentCycle() {
         currentRenterPhone: user.phoneNumber,
         rentedAt: new Date().toISOString(),
         rentalDuration: requestedDuration,
+        rentalPrice: rentalPrice,
         rentalEndTime: rentalEndTime.toISOString()
       });
 
