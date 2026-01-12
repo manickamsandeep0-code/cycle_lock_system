@@ -95,7 +95,7 @@ export default function MyRental() {
       }
 
       const cyclesRef = collection(db, 'cycles');
-      const q = query(cyclesRef, where('currentRenter', '==', user.id), where('status', '==', 'rented'));
+      const q = query(cyclesRef, where('currentRenter', '==', user.id), where('status', '==', CYCLE_STATUS.RENTED));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {

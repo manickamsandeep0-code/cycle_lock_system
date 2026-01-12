@@ -60,7 +60,7 @@ export default function RegisterLock() {
           ownerName: user.name,
           ownerPhone: user.phoneNumber,
           cycleName: cycleName,
-          status: 'available',
+          status: CYCLE_STATUS.AVAILABLE,
           registeredAt: new Date().toISOString(),
         });
       } else {

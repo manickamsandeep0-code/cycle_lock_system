@@ -56,10 +56,9 @@ export default function Map() {
             const lat = lock.location?.latitude || metaData.location?.latitude || KARUNYA_LOCATION.latitude;
             const lng = lock.location?.longitude || metaData.location?.longitude || KARUNYA_LOCATION.longitude;
             
-            // Determine status based on Arduino's "locked" flag
-            // If lock.status.locked is true, it's AVAILABLE to rent. If false, it's RENTED.
-            const isLocked = lock.status?.locked ?? true;
-            const status = isLocked ? CYCLE_STATUS.AVAILABLE : CYCLE_STATUS.RENTED;
+            // CRITICAL: Use Firestore status as source of truth, not Arduino lock state
+            // Firestore status is managed by the app's rental flow
+            const status = metaData.status || CYCLE_STATUS.NOT_AVAILABLE;
 
             return {
               id: metaData.id || lockCode,
