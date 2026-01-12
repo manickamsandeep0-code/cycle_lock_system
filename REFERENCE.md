@@ -83,7 +83,7 @@ Longitude: 76.7441
 - createdAt
 
 ### cycles
-- lockId (unique)
+- lockCode (unique)
 - cycleName
 - ownerId
 - ownerName

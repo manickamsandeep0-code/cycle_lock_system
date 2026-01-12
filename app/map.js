@@ -37,7 +37,7 @@ export default function Map() {
         const cyclesSnapshot = await getDocs(collection(db, 'cycles'));
         const cyclesMap = {};
         cyclesSnapshot.forEach(doc => {
-          cyclesMap[doc.data().lockId] = { id: doc.id, ...doc.data() };
+          cyclesMap[doc.data().lockCode] = { id: doc.id, ...doc.data() };
         });
 
         // 2. Listen to LIVE data (Location, Status) from Realtime Database
@@ -46,9 +46,9 @@ export default function Map() {
           const locksData = snapshot.val();
           if (!locksData) return;
 
-          const mergedData = Object.keys(locksData).map(lockId => {
-            const lock = locksData[lockId];
-            const metaData = cyclesMap[lockId] || {}; // Match using Lock ID
+          const mergedData = Object.keys(locksData).map(lockCode => {
+            const lock = locksData[lockCode];
+            const metaData = cyclesMap[lockCode] || {}; // Match using Lock ID
 
             // If Arduino hasn't sent location yet, fallback to fixed location or defaults
             const lat = lock.location?.latitude || metaData.location?.latitude || KARUNYA_LOCATION.latitude;
@@ -60,8 +60,8 @@ export default function Map() {
             const status = isLocked ? CYCLE_STATUS.AVAILABLE : CYCLE_STATUS.RENTED;
 
             return {
-              id: metaData.id || lockId,
-              lockId: lockId,
+              id: metaData.id || lockCode,
+              lockCode: lockCode,
               ...metaData, // Name, Price, etc.
               location: { latitude: lat, longitude: lng }, // Live GPS coordinates
               status: status,

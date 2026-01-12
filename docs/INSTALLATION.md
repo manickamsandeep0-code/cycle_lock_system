@@ -87,7 +87,7 @@ npm install
    {
      "rules": {
        "cycles": {
-         "$lockId": {
+         "$lockCode": {
            ".read": true,
            ".write": true
          }

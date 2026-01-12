@@ -160,7 +160,7 @@ const char* FIREBASE_HOST = "your-project.firebaseio.com";
 #### cycles
 ```json
 {
-  "lockId": "LOCK_001",
+  "lockCode": "LOCK_001",
   "cycleName": "Red Cycle",
   "ownerId": "user_id",
   "ownerName": "John Doe",

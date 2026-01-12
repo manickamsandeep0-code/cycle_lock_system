@@ -45,7 +45,7 @@
            │   ✓ Lock not already owned
            │
            ├─► Updates Firestore:
-           │   lockId: "LOCK_0001"
+           │   lockCode: "LOCK_0001"
            │   ownerId: "919876543210" ← LINKED!
            │   ownerName: "Raj Kumar"
            │   cycleName: "My Hero Cycle"
@@ -117,7 +117,7 @@ This creates 10 locks (LOCK_0001 to LOCK_0010) in Firestore:
 ```javascript
 // Firestore: cycles collection
 {
-  lockId: "LOCK_0001",
+  lockCode: "LOCK_0001",
   lockCode: "LOCK_0001",  // Used for owner registration
   ownerId: null,           // No owner yet
   ownerName: null,
@@ -180,7 +180,7 @@ App validates and updates Firestore:
 ```javascript
 // Updates the existing LOCK_0001 document
 {
-  lockId: "LOCK_0001",
+  lockCode: "LOCK_0001",
   ownerId: "919876543210",     // ← Owner linked!
   ownerName: "Raj Kumar",
   ownerPhone: "+919876543210",
@@ -256,8 +256,8 @@ When renter confirms rental:
 
 ```javascript
 // services/lockService.js
-export const unlockCycle = async (lockId) => {
-  const lockRef = ref(realtimeDb, `locks/${lockId}/command`);
+export const unlockCycle = async (lockCode) => {
+  const lockRef = ref(realtimeDb, `locks/${lockCode}/command`);
   await set(lockRef, {
     action: 'UNLOCK',
     timestamp: Date.now(),
@@ -306,7 +306,7 @@ void loop() {
 ```
 cycles collection → Document ID: (auto-generated)
 {
-  lockId: "LOCK_0001",
+  lockCode: "LOCK_0001",
   ownerId: "919876543210",  ← This links lock to owner
   cycleName: "My Hero Cycle"
 }
@@ -334,7 +334,7 @@ const q = query(
 );
 
 // For unlock command:
-await unlockCycle(cycle.lockId);  ← Uses lockId from Firestore
+await unlockCycle(cycle.lockCode);  ← Uses lockCode from Firestore
 ```
 
 ---
@@ -368,7 +368,7 @@ Owner "Raj Kumar" (ID: 919876543210)
 ### Test 1: Verify Lock Registration
 ```bash
 # In Firebase Console → Firestore → cycles
-# Find document with lockId: "LOCK_0001"
+# Find document with lockCode: "LOCK_0001"
 # Check: ownerId should be your phone number
 ```
 
@@ -403,7 +403,7 @@ Owner "Raj Kumar" (ID: 919876543210)
 
 ### Arduino not receiving unlock command?
 ✓ Check WiFi connection
-✓ Verify LOCK_ID matches Firestore `lockId`
+✓ Verify LOCK_ID matches Firestore `lockCode`
 ✓ Check Firebase Realtime Database rules
 ✓ Verify database URL in Arduino code
 

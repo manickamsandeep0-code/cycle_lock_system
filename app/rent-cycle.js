@@ -24,7 +24,7 @@ export default function RentCycle() {
       }
 
       // Write unlock command to Realtime Database
-      const commandRef = ref(realtimeDb, `/locks/${cycle.lockId}/command`);
+      const commandRef = ref(realtimeDb, `/locks/${cycle.lockCode}/command`);
       await set(commandRef, {
         action: "UNLOCK",
         executed: false,
@@ -32,7 +32,7 @@ export default function RentCycle() {
 
       Alert.alert(
         'Success!',
-        `Unlock command sent to ${cycle.cycleName || cycle.lockId}!`,
+        `Unlock command sent to ${cycle.cycleName || cycle.lockCode}!`,
         [{ text: 'OK', onPress: () => router.replace('/my-rental') }]
       );
     } catch (error) {
@@ -47,12 +47,12 @@ export default function RentCycle() {
     <ScrollView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Rent Cycle</Text>
-        <Text style={styles.cycleName}>{cycle.cycleName || cycle.lockId}</Text>
+        <Text style={styles.cycleName}>{cycle.cycleName || cycle.lockCode}</Text>
 
         <View style={styles.infoBox}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Lock ID:</Text>
-            <Text style={styles.infoValue}>{cycle.lockId}</Text>
+            <Text style={styles.infoValue}>{cycle.lockCode}</Text>
           </View>
           {cycle.ownerName && (
             <View style={styles.infoRow}>

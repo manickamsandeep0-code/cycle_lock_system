@@ -51,7 +51,7 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
 
             <View style={styles.detailRow}>
               <Text style={styles.label}>Lock ID</Text>
-              <Text style={styles.value}>{cycle.lockId}</Text>
+              <Text style={styles.value}>{cycle.lockCode}</Text>
             </View>
 
             <View style={styles.detailRow}>

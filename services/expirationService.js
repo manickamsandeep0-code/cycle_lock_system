@@ -46,7 +46,7 @@ const completeExpiredRental = async (cycleId, cycle) => {
     await addDoc(collection(db, 'rentalHistory'), {
       cycleId: cycleId,
       cycleName: cycle.cycleName,
-      lockId: cycle.lockId,
+      lockCode: cycle.lockCode,
       ownerId: cycle.ownerId,
       ownerName: cycle.ownerName,
       renterId: cycle.currentRenter,
@@ -62,7 +62,7 @@ const completeExpiredRental = async (cycleId, cycle) => {
     });
     
     // Lock the cycle
-    await lockCycle(cycle.lockId);
+    await lockCycle(cycle.lockCode);
     
     // Update cycle status to available
     await updateDoc(cycleRef, {

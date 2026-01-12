@@ -92,8 +92,8 @@ export default function MyRental() {
         setRental(rentalData);
         
         // Listen to battery updates from Realtime Database
-        if (rentalData.lockId) {
-          const batteryRef = ref(realtimeDb, `/locks/${rentalData.lockId}/battery`);
+        if (rentalData.lockCode) {
+          const batteryRef = ref(realtimeDb, `/locks/${rentalData.lockCode}/battery`);
           onValue(batteryRef, (snapshot) => {
             const battery = snapshot.val();
             setBatteryLevel(battery);
@@ -129,7 +129,7 @@ export default function MyRental() {
       const user = await getUserData();
       
       // Step 1: Lock the cycle
-      await lockCycle(rental.lockId);
+      await lockCycle(rental.lockCode);
 
       // Step 2: Stop location tracking
       stopLocationTracking();
@@ -138,7 +138,7 @@ export default function MyRental() {
       await addDoc(collection(db, 'rentalHistory'), {
         cycleId: rental.id,
         cycleName: rental.cycleName,
-        lockId: rental.lockId,
+        lockCode: rental.lockCode,
         ownerId: rental.ownerId,
         ownerName: rental.ownerName,
         renterId: user.id,

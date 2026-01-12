@@ -152,7 +152,7 @@ Cycleapp/
 ```javascript
 {
   id: "auto-generated",
-  lockId: "string (unique)",
+  lockCode: "string (unique)",
   cycleName: "string",
   ownerId: "string (ref to users)",
   ownerName: "string",

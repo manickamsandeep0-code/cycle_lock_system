@@ -70,7 +70,7 @@ In Firebase Console → Realtime Database → Rules, paste:
 {
   "rules": {
     "cycles": {
-      "$lockId": {
+      "$lockCode": {
         ".read": true,
         ".write": true
       }

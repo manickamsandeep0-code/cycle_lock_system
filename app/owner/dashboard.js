@@ -34,15 +34,15 @@ export default function OwnerDashboard() {
         
         // Listen to battery updates for each cycle
         cyclesList.forEach(cycle => {
-          // Use lockId if available, otherwise use lockCode (for backward compatibility)
-          const lockIdentifier = cycle.lockId || cycle.lockCode;
-          if (lockIdentifier) {
-            const batteryRef = ref(realtimeDb, `/locks/${lockIdentifier}/battery`);
+          // Use lockCode if available, otherwise use lockCode (for backward compatibility)
+          const lockCodeentifier = cycle.lockCode || cycle.lockCode;
+          if (lockCodeentifier) {
+            const batteryRef = ref(realtimeDb, `/locks/${lockCodeentifier}/battery`);
             onValue(batteryRef, (snapshot) => {
               const battery = snapshot.val();
               setBatteryLevels(prev => ({
                 ...prev,
-                [lockIdentifier]: battery
+                [lockCodeentifier]: battery
               }));
             });
           }
@@ -137,7 +137,7 @@ export default function OwnerDashboard() {
   const renderCycleCard = (cycle) => {
     const isAvailable = cycle.status === CYCLE_STATUS.AVAILABLE;
     const isRented = cycle.status === CYCLE_STATUS.RENTED;
-    const lockIdentifier = cycle.lockId || cycle.lockCode; // Use lockId or lockCode
+    const lockCodeentifier = cycle.lockCode || cycle.lockCode; // Use lockCode or lockCode
 
     return (
       <View key={cycle.id} style={styles.cycleCard}>
@@ -157,7 +157,7 @@ export default function OwnerDashboard() {
 
         <View style={styles.cycleInfo}>
           <Text style={styles.infoLabel}>Lock Code:</Text>
-          <Text style={styles.infoValue}>{lockIdentifier}</Text>
+          <Text style={styles.infoValue}>{lockCodeentifier}</Text>
         </View>
 
         <View style={styles.cycleInfo}>
@@ -169,18 +169,18 @@ export default function OwnerDashboard() {
           </Text>
         </View>
 
-        {batteryLevels[lockIdentifier] !== undefined && batteryLevels[lockIdentifier] !== null && (
+        {batteryLevels[lockCodeentifier] !== undefined && batteryLevels[lockCodeentifier] !== null && (
           <View style={styles.cycleInfo}>
             <Text style={styles.infoLabel}>Battery:</Text>
             <View style={styles.batteryRow}>
               <Text style={styles.batteryIcon}>
-                {batteryLevels[lockIdentifier] >= 60 ? '🔋' : batteryLevels[lockIdentifier] >= 30 ? '🔋' : '🪫'}
+                {batteryLevels[lockCodeentifier] >= 60 ? '🔋' : batteryLevels[lockCodeentifier] >= 30 ? '🔋' : '🪫'}
               </Text>
               <Text style={[
                 styles.batteryValue,
-                { color: batteryLevels[lockIdentifier] >= 60 ? '#10b981' : batteryLevels[lockIdentifier] >= 30 ? '#f59e0b' : '#ef4444' }
+                { color: batteryLevels[lockCodeentifier] >= 60 ? '#10b981' : batteryLevels[lockCodeentifier] >= 30 ? '#f59e0b' : '#ef4444' }
               ]}>
-                {batteryLevels[lockIdentifier]}%
+                {batteryLevels[lockCodeentifier]}%
               </Text>
             </View>
           </View>
