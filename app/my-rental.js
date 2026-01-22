@@ -6,7 +6,7 @@ import { ref, onValue } from 'firebase/database';
 import { db, realtimeDb } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
-import { lockCycle } from '../services/lockService';
+import { lockCycle, unlockCycle } from '../services/lockService';
 import { stopLocationTracking, getCurrentLocation } from '../services/locationService';
 import { checkGeofence } from '../services/geofenceService';
 import { checkAndExpireRental } from '../services/expirationService';
@@ -22,6 +22,7 @@ export default function MyRental() {
   const [geofenceWarning, setGeofenceWarning] = useState(null);
   const [expirationCheckInterval, setExpirationCheckInterval] = useState(null);
   const [batteryLevel, setBatteryLevel] = useState(null);
+  const [lockActionLoading, setLockActionLoading] = useState(false);
 
   useEffect(() => {
     loadActiveRental();
@@ -117,6 +118,32 @@ export default function MyRental() {
       console.error('Error loading rental:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLockCycle = async () => {
+    setLockActionLoading(true);
+    try {
+      await lockCycle(rental.lockCode);
+      Alert.alert('Success', 'Cycle locked successfully!');
+    } catch (error) {
+      console.error('Error locking cycle:', error);
+      Alert.alert('Error', 'Failed to lock cycle. Please try again.');
+    } finally {
+      setLockActionLoading(false);
+    }
+  };
+
+  const handleUnlockCycle = async () => {
+    setLockActionLoading(true);
+    try {
+      await unlockCycle(rental.lockCode);
+      Alert.alert('Success', 'Cycle unlocked successfully!');
+    } catch (error) {
+      console.error('Error unlocking cycle:', error);
+      Alert.alert('Error', 'Failed to unlock cycle. Please try again.');
+    } finally {
+      setLockActionLoading(false);
     }
   };
 
@@ -326,6 +353,24 @@ export default function MyRental() {
             <Text style={styles.timeText}>{timeRemaining()}</Text>
           </View>
 
+          <View style={styles.lockControls}>
+            <TouchableOpacity 
+              style={[styles.lockButton, lockActionLoading && styles.buttonDisabled]}
+              onPress={handleLockCycle}
+              disabled={lockActionLoading}
+            >
+              <Text style={styles.lockButtonText}>🔒 Lock</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.unlockButton, lockActionLoading && styles.buttonDisabled]}
+              onPress={handleUnlockCycle}
+              disabled={lockActionLoading}
+            >
+              <Text style={styles.unlockButtonText}>🔓 Unlock</Text>
+            </TouchableOpacity>
+          </View>
+
           {geofenceWarning && (
             <View style={styles.warningBox}>
               <Text style={styles.warningIcon}>⚠️</Text>
@@ -445,6 +490,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1e40af',
+  },
+  lockControls: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  lockButton: {
+    flex: 1,
+    backgroundColor: '#ef4444',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  lockButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  unlockButton: {
+    flex: 1,
+    backgroundColor: '#10b981',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  unlockButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   warningBox: {
     backgroundColor: '#fef2f2',

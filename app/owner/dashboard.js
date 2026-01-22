@@ -6,6 +6,7 @@ import { ref, onValue } from 'firebase/database';
 import { db, realtimeDb } from '../../config/firebase';
 import { getUserData, clearUserData } from '../../utils/storage';
 import { CYCLE_STATUS } from '../../constants';
+import { lockCycle, unlockCycle } from '../../services/lockService';
 
 export default function OwnerDashboard() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [batteryLevels, setBatteryLevels] = useState({});
   const [liveLocations, setLiveLocations] = useState({});
+  const [lockActionLoading, setLockActionLoading] = useState({});
 
   useEffect(() => {
     loadUserAndCycles();
@@ -139,6 +141,32 @@ export default function OwnerDashboard() {
     }
   };
 
+  const handleLockCycle = async (lockCode, cycleName) => {
+    setLockActionLoading(prev => ({ ...prev, [lockCode]: true }));
+    try {
+      await lockCycle(lockCode);
+      Alert.alert('Success', `${cycleName} locked successfully!`);
+    } catch (error) {
+      console.error('Error locking cycle:', error);
+      Alert.alert('Error', 'Failed to lock cycle. Please try again.');
+    } finally {
+      setLockActionLoading(prev => ({ ...prev, [lockCode]: false }));
+    }
+  };
+
+  const handleUnlockCycle = async (lockCode, cycleName) => {
+    setLockActionLoading(prev => ({ ...prev, [lockCode]: true }));
+    try {
+      await unlockCycle(lockCode);
+      Alert.alert('Success', `${cycleName} unlocked successfully!`);
+    } catch (error) {
+      console.error('Error unlocking cycle:', error);
+      Alert.alert('Error', 'Failed to unlock cycle. Please try again.');
+    } finally {
+      setLockActionLoading(prev => ({ ...prev, [lockCode]: false }));
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert(
       'Logout',
@@ -244,23 +272,43 @@ export default function OwnerDashboard() {
           </TouchableOpacity>
 
           {!isRented && (
-            <TouchableOpacity 
-              style={[styles.toggleButton, !isAvailable && styles.toggleButtonInactive]}
-              onPress={() => {
-                if (isAvailable) {
-                  toggleCycleAvailability(cycle.id, cycle.status);
-                } else {
-                  router.push({
-                    pathname: '/owner/set-availability',
-                    params: { cycleId: cycle.id, cycleName: cycle.cycleName }
-                  });
-                }
-              }}
-            >
-              <Text style={styles.toggleButtonText}>
-                {isAvailable ? 'Mark as Unavailable' : 'Set Available'}
-              </Text>
-            </TouchableOpacity>
+            <>
+              <View style={styles.lockControls}>
+                <TouchableOpacity 
+                  style={[styles.lockButton, lockActionLoading[cycle.lockCode] && styles.buttonDisabled]}
+                  onPress={() => handleLockCycle(cycle.lockCode, cycle.cycleName)}
+                  disabled={lockActionLoading[cycle.lockCode]}
+                >
+                  <Text style={styles.lockButtonText}>🔒 Lock</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.unlockButton, lockActionLoading[cycle.lockCode] && styles.buttonDisabled]}
+                  onPress={() => handleUnlockCycle(cycle.lockCode, cycle.cycleName)}
+                  disabled={lockActionLoading[cycle.lockCode]}
+                >
+                  <Text style={styles.unlockButtonText}>🔓 Unlock</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity 
+                style={[styles.toggleButton, !isAvailable && styles.toggleButtonInactive]}
+                onPress={() => {
+                  if (isAvailable) {
+                    toggleCycleAvailability(cycle.id, cycle.status);
+                  } else {
+                    router.push({
+                      pathname: '/owner/set-availability',
+                      params: { cycleId: cycle.id, cycleName: cycle.cycleName }
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.toggleButtonText}>
+                  {isAvailable ? 'Mark as Unavailable' : 'Set Available'}
+                </Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
 
@@ -630,6 +678,37 @@ const styles = StyleSheet.create({
   mapButtonText: {
     color: '#ffffff',
     fontWeight: '600',
+  },
+  lockControls: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  lockButton: {
+    flex: 1,
+    backgroundColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  lockButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  unlockButton: {
+    flex: 1,
+    backgroundColor: '#10b981',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  unlockButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   toggleButton: {
     backgroundColor: '#1e40af',
