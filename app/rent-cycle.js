@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, set } from 'firebase/database';
 import { db, realtimeDb } from '../config/firebase';
 import { getUserData } from '../utils/storage';
@@ -10,7 +10,25 @@ import { CYCLE_STATUS } from '../constants';
 export default function RentCycle() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const cycle = JSON.parse(params.cycle);
+  
+  // Safe JSON parsing with error handling
+  let cycle;
+  try {
+    cycle = JSON.parse(params.cycle);
+  } catch (error) {
+    console.error('Error parsing cycle data:', error);
+    Alert.alert('Error', 'Invalid cycle data');
+    router.back();
+    return null;
+  }
+  
+  // Validate cycle object
+  if (!cycle || !cycle.id || !cycle.lockCode) {
+    Alert.alert('Error', 'Invalid cycle information');
+    router.back();
+    return null;
+  }
+  
   const requestedDuration = params.requestedDuration ? parseInt(params.requestedDuration) : 60;
   
   const [loading, setLoading] = useState(false);
@@ -25,8 +43,38 @@ export default function RentCycle() {
         return;
       }
 
-      // Step 1: Update cycle status in Firestore
+      // CRITICAL: Check if user already has an active rental
+      const cyclesRef = collection(db, 'cycles');
+      const activeRentalQuery = query(cyclesRef, where('currentRenter', '==', user.id), where('status', '==', CYCLE_STATUS.RENTED));
+      const activeRentals = await getDocs(activeRentalQuery);
+      
+      if (!activeRentals.empty) {
+        Alert.alert('Error', 'You already have an active rental. Complete it before renting another cycle.');
+        setLoading(false);
+        router.back();
+        return;
+      }
+
+      // CRITICAL: Check if cycle is still available before renting
       const cycleRef = doc(db, 'cycles', cycle.id);
+      const cycleDoc = await getDoc(cycleRef);
+      
+      if (!cycleDoc.exists()) {
+        Alert.alert('Error', 'Cycle not found');
+        setLoading(false);
+        router.back();
+        return;
+      }
+      
+      const currentCycleData = cycleDoc.data();
+      if (currentCycleData.status !== CYCLE_STATUS.AVAILABLE) {
+        Alert.alert('Error', 'This cycle is no longer available');
+        setLoading(false);
+        router.back();
+        return;
+      }
+
+      // Step 1: Update cycle status in Firestore
       const rentalEndTime = new Date();
       rentalEndTime.setMinutes(rentalEndTime.getMinutes() + requestedDuration);
       
