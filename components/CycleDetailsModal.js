@@ -1,10 +1,10 @@
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { formatMinutes } from '../utils/timeHelpers';
+import { formatMinutes, calculateRemainingTime } from '../utils/timeHelpers';
 
 export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
   if (!cycle) return null;
 
-  const remainingTime = cycle.remainingMinutes || 0;
+  const remainingTime = calculateRemainingTime(cycle);
 
   // Battery icon and color based on level
   const getBatteryDisplay = (battery) => {
@@ -56,7 +56,9 @@ export default function CycleDetailsModal({ visible, cycle, onClose, onRent }) {
 
             <View style={styles.detailRow}>
               <Text style={styles.label}>Available For</Text>
-              <Text style={styles.value}>{formatMinutes(remainingTime)}</Text>
+              <Text style={styles.value}>
+                {cycle.availableUntil ? formatMinutes(remainingTime) : 'Unlimited'}
+              </Text>
             </View>
 
             <View style={styles.detailRow}>
