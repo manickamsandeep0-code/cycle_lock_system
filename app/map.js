@@ -25,6 +25,7 @@ export default function Map() {
   const [userLocation, setUserLocation] = useState(null);
   const [showDurationDialog, setShowDurationDialog] = useState(true);
   const [requestedDuration, setRequestedDuration] = useState(null);
+  const [mapInitialized, setMapInitialized] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -80,7 +81,13 @@ export default function Map() {
           });
 
           setCycles(mergedData);
-          filterCycles(mergedData, requestedDuration);
+          const newFilteredCycles = filterCycles(mergedData, requestedDuration);
+          
+          // Update markers without reloading entire WebView
+          if (mapInitialized && webViewRef.current) {
+            updateMapMarkers(newFilteredCycles);
+          }
+          
           setLoading(false);
         });
       } catch (err) {
@@ -116,6 +123,7 @@ export default function Map() {
     }
     
     setFilteredCycles(available);
+    return available; // Return for use in update function
   };
 
   const loadUserData = async () => {
@@ -148,6 +156,21 @@ export default function Map() {
         requestedDuration: requestedDuration 
       }
     });
+  };
+
+  const updateMapMarkers = (cyclesData) => {
+    if (!webViewRef.current) return;
+    
+    const cyclesJSON = JSON.stringify(cyclesData);
+    const js = `
+      (function() {
+        if (typeof window.updateCycles === 'function') {
+          window.updateCycles(${cyclesJSON});
+        }
+      })();
+    `;
+    
+    webViewRef.current.injectJavaScript(js);
   };
 
   const handleDurationConfirm = (totalMinutes) => {
@@ -188,7 +211,7 @@ export default function Map() {
 <body>
   <div id="map"></div>
   <script>
-    const cycles = ${cyclesJSON};
+    let cycleMarkers = {};
     const userLocation = ${userLocationJSON};
     const map = L.map('map').setView([${KARUNYA_LOCATION.latitude}, ${KARUNYA_LOCATION.longitude}], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
@@ -197,10 +220,19 @@ export default function Map() {
       L.circleMarker([userLocation.latitude, userLocation.longitude], { radius: 8, fillColor: '#3b82f6', color: '#fff', weight: 2, fillOpacity: 0.8 }).addTo(map).bindPopup('You are here');
     }
 
-    cycles.forEach(cycle => {
-      // Safety check for location
-      if(cycle.location && cycle.location.latitude && cycle.location.longitude) {
-        const isAvailable = cycle.status === '${CYCLE_STATUS.AVAILABLE}';
+    function createOrUpdateMarker(cycle) {
+      if(!cycle.location || !cycle.location.latitude || !cycle.location.longitude) return;
+      
+      const isAvailable = cycle.status === '${CYCLE_STATUS.AVAILABLE}';
+      const cycleId = cycle.id || cycle.lockCode;
+      
+      // If marker exists, just update position and popup
+      if (cycleMarkers[cycleId]) {
+        cycleMarkers[cycleId].setLatLng([cycle.location.latitude, cycle.location.longitude]);
+        const batteryText = cycle.battery ? '<br/>🔋 ' + cycle.battery + '%' : '';
+        cycleMarkers[cycleId].setPopupContent('<b>' + (cycle.cycleName || 'Cycle') + '</b><br/>Owner: ' + (cycle.ownerName || 'Unknown') + '<br/>Status: ' + (isAvailable ? 'Available' : 'Rented') + batteryText);
+      } else {
+        // Create new marker
         const marker = L.marker([cycle.location.latitude, cycle.location.longitude], {
           icon: L.divIcon({ className: 'custom-div-icon', html: '<div class="custom-marker">' + (isAvailable ? '🚲' : '🔒') + '</div>', iconSize: [40, 40], iconAnchor: [20, 20] })
         }).addTo(map);
@@ -210,8 +242,31 @@ export default function Map() {
         
         const batteryText = cycle.battery ? '<br/>🔋 ' + cycle.battery + '%' : '';
         marker.bindPopup('<b>' + (cycle.cycleName || 'Cycle') + '</b><br/>Owner: ' + (cycle.ownerName || 'Unknown') + '<br/>Status: ' + (isAvailable ? 'Available' : 'Rented') + batteryText);
+        
+        cycleMarkers[cycleId] = marker;
       }
-    });
+    }
+    
+    function updateCycles(newCycles) {
+      // Remove markers that are no longer in the list
+      const newCycleIds = new Set(newCycles.map(c => c.id || c.lockCode));
+      Object.keys(cycleMarkers).forEach(id => {
+        if (!newCycleIds.has(id)) {
+          map.removeLayer(cycleMarkers[id]);
+          delete cycleMarkers[id];
+        }
+      });
+      
+      // Update or create markers
+      newCycles.forEach(cycle => createOrUpdateMarker(cycle));
+    }
+    
+    // Expose updateCycles to window for React Native to call
+    window.updateCycles = updateCycles;
+    
+    // Initial render
+    const initialCycles = ${cyclesJSON};
+    initialCycles.forEach(cycle => createOrUpdateMarker(cycle));
   </script>
 </body>
 </html>
@@ -246,11 +301,12 @@ export default function Map() {
 
       <WebView
         ref={webViewRef}
-        key={`map-${filteredCycles.length}-${JSON.stringify(filteredCycles.map(c => c.location))}`}
+        key="stable-map-key"
         style={styles.map}
         originWhitelist={['*']}
         source={{ html: generateMapHTML() }}
         onMessage={handleWebViewMessage}
+        onLoadEnd={() => setMapInitialized(true)}
         javaScriptEnabled
         domStorageEnabled
       />
