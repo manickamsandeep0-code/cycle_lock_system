@@ -6,6 +6,7 @@ import { ref, set } from 'firebase/database';
 import { db, realtimeDb } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS } from '../constants';
+import { updateEndAlert } from '../services/lockService';
 
 export default function RentCycle() {
   const router = useRouter();
@@ -100,6 +101,9 @@ export default function RentCycle() {
         executed: false,
         timestamp: Date.now()
       });
+
+      // Step 3: Initialize endAlert to false
+      await updateEndAlert(cycle.lockCode, false);
 
       Alert.alert(
         'Success!',

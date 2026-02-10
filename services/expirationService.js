@@ -1,7 +1,7 @@
 import { doc, updateDoc, getDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CYCLE_STATUS } from '../constants';
-import { lockCycle } from './lockService';
+import { lockCycle, updateEndAlert } from './lockService';
 import { stopLocationTracking } from './locationService';
 
 // Check if cycle availability has expired and mark as NOT_AVAILABLE
@@ -99,6 +99,9 @@ const completeExpiredRental = async (cycleId, cycle) => {
     
     // Lock the cycle
     await lockCycle(cycle.lockCode);
+    
+    // Clear end alert
+    await updateEndAlert(cycle.lockCode, false);
     
     // Update cycle status to available
     await updateDoc(cycleRef, {

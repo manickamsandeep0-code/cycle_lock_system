@@ -80,6 +80,21 @@ export const getLockStatus = (lockCode) => {
   });
 };
 
+// Update end alert status (true when < 2 mins remaining)
+export const updateEndAlert = async (lockCode, shouldAlert) => {
+  try {
+    const statusRef = ref(realtimeDb, `locks/${lockCode}/status`);
+    await update(statusRef, {
+      endAlert: shouldAlert
+    });
+    console.log(`End alert ${shouldAlert ? 'activated' : 'cleared'} for ${lockCode}`);
+    return true;
+  } catch (error) {
+    console.error('Error updating end alert:', error);
+    throw error;
+  }
+};
+
 // Initialize lock in Realtime Database
 export const initializeLock = async (lockCode) => {
   try {
@@ -87,7 +102,8 @@ export const initializeLock = async (lockCode) => {
     await set(lockRef, {
       status: {
         locked: true,
-        online: false
+        online: false,
+        endAlert: false,
       },
       battery: 100,
       lastUpdated: Date.now(),

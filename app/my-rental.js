@@ -6,7 +6,7 @@ import { ref, onValue } from 'firebase/database';
 import { db, realtimeDb } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
-import { lockCycle, unlockCycle } from '../services/lockService';
+import { lockCycle, unlockCycle, updateEndAlert } from '../services/lockService';
 import { stopLocationTracking, getCurrentLocation } from '../services/locationService';
 import { checkGeofence } from '../services/geofenceService';
 import { checkAndExpireRental } from '../services/expirationService';
@@ -56,13 +56,32 @@ export default function MyRental() {
 
       // Check expiration every minute
       const expInterval = setInterval(async () => {
+        // Check if rental has expired
         const expired = await checkAndExpireRental(rental.id);
         if (expired) {
+          // Clear end alert when rental expires
+          await updateEndAlert(rental.lockCode, false);
           Alert.alert(
             'Rental Expired',
             'Your rental time has ended. The cycle has been locked automatically.',
             [{ text: 'OK', onPress: () => router.replace('/map') }]
           );
+          return;
+        }
+        
+        // Check remaining time and update endAlert
+        if (rental.rentalEndTime) {
+          const endTime = new Date(rental.rentalEndTime);
+          const now = new Date();
+          const remainingMs = endTime - now;
+          const remainingMinutes = Math.floor(remainingMs / 60000);
+          
+          // Update endAlert based on remaining time
+          if (remainingMinutes < 2 && remainingMinutes >= 0) {
+            await updateEndAlert(rental.lockCode, true);
+          } else {
+            await updateEndAlert(rental.lockCode, false);
+          }
         }
       }, 60000);
 
@@ -103,6 +122,21 @@ export default function MyRental() {
         const cycleDoc = querySnapshot.docs[0];
         const rentalData = { id: cycleDoc.id, ...cycleDoc.data() };
         setRental(rentalData);
+        
+        // Immediate check for endAlert based on remaining time
+        if (rentalData.rentalEndTime && rentalData.lockCode) {
+          const endTime = new Date(rentalData.rentalEndTime);
+          const now = new Date();
+          const remainingMs = endTime - now;
+          const remainingMinutes = Math.floor(remainingMs / 60000);
+          
+          // Set endAlert if less than 2 minutes remaining
+          if (remainingMinutes < 2 && remainingMinutes >= 0) {
+            updateEndAlert(rentalData.lockCode, true);
+          } else {
+            updateEndAlert(rentalData.lockCode, false);
+          }
+        }
         
         // Listen to battery updates from Realtime Database
         if (rentalData.lockCode) {
@@ -171,10 +205,13 @@ export default function MyRental() {
       // Step 1: Lock the cycle
       await lockCycle(rental.lockCode);
 
-      // Step 2: Stop location tracking
+      // Step 2: Clear end alert
+      await updateEndAlert(rental.lockCode, false);
+
+      // Step 3: Stop location tracking
       stopLocationTracking();
 
-      // Step 3: Create rental history record
+      // Step 4: Create rental history record
       await addDoc(collection(db, 'rentalHistory'), {
         cycleId: rental.id,
         cycleName: rental.cycleName,
@@ -193,7 +230,7 @@ export default function MyRental() {
         autoCompleted: false
       });
 
-      // Step 4: Update cycle status back to available
+      // Step 5: Update cycle status back to available
       const cycleRef = doc(db, 'cycles', rental.id);
       await updateDoc(cycleRef, {
         status: CYCLE_STATUS.AVAILABLE,
