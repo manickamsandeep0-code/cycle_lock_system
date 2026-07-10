@@ -4,13 +4,25 @@ import { useRouter } from 'expo-router';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getUserData } from '../../utils/storage';
-import { CYCLE_STATUS, LOCK_STATUS, KARUNYA_LOCATION } from '../../constants';
+import { CYCLE_STATUS } from '../../constants';
 
 export default function RegisterLock() {
   const router = useRouter();
   const [lockCode, setLockCode] = useState('');
   const [cycleName, setCycleName] = useState('');
+  const [macAddress, setMacAddress] = useState('');
+  const [lockPin, setLockPin] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const validateMacAddress = (mac) => {
+    // Accept formats: AA:BB:CC:DD:EE:FF or AABBCCDDEEFF
+    const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$|^([0-9A-Fa-f]{12})$/;
+    return macRegex.test(mac.trim());
+  };
+
+  const validatePin = (pin) => {
+    return /^\d{4}$/.test(pin);
+  };
 
   const handleRegisterLock = async () => {
     if (!lockCode.trim()) {
@@ -19,6 +31,22 @@ export default function RegisterLock() {
     }
     if (!cycleName.trim()) {
       Alert.alert('Error', 'Please enter a name for your cycle');
+      return;
+    }
+    if (!macAddress.trim()) {
+      Alert.alert('Error', 'Please enter the BLE MAC Address of the HM-10/JDY-08 module');
+      return;
+    }
+    if (!validateMacAddress(macAddress)) {
+      Alert.alert('Error', 'Invalid MAC Address format. Use AA:BB:CC:DD:EE:FF format.');
+      return;
+    }
+    if (!lockPin.trim()) {
+      Alert.alert('Error', 'Please enter the 4-digit Lock PIN');
+      return;
+    }
+    if (!validatePin(lockPin)) {
+      Alert.alert('Error', 'Lock PIN must be exactly 4 digits (0-9).');
       return;
     }
 
@@ -51,15 +79,20 @@ export default function RegisterLock() {
             return;
           }
         }
-        // Lock exists but no owner - update it with owner info
+        // Lock exists but no owner - update it with owner info and BLE credentials
         const cycleDocId = querySnapshot.docs[0].id;
         const cycleRef = doc(db, 'cycles', cycleDocId);
         
+        // Normalize MAC address to uppercase with colons
+        const normalizedMac = macAddress.trim().toUpperCase().replace(/[:-]/g, '').replace(/(.{2})/g, '$1:').slice(0, -1);
+
         await updateDoc(cycleRef, {
           ownerId: user.id,
           ownerName: user.name,
           ownerPhone: user.phoneNumber,
           cycleName: cycleName,
+          macAddress: normalizedMac,
+          lockPin: lockPin,
           status: CYCLE_STATUS.AVAILABLE,
           registeredAt: new Date().toISOString(),
         });
@@ -85,9 +118,9 @@ export default function RegisterLock() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Register Your Lock</Text>
+        <Text style={styles.title}>Register Your BLE Lock</Text>
         <Text style={styles.subtitle}>
-          Enter the unique Lock ID from your Arduino device
+          Enter the details of your STM8 + BLE lock module
         </Text>
 
         <View style={styles.inputContainer}>
@@ -100,7 +133,7 @@ export default function RegisterLock() {
             autoCapitalize="characters"
           />
           <Text style={styles.hint}>
-            This must match the Lock Code programmed in your Arduino
+            This must match the Lock Code in the system database
           </Text>
         </View>
 
@@ -117,11 +150,44 @@ export default function RegisterLock() {
           </Text>
         </View>
 
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>BLE MAC Address</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., AA:BB:CC:DD:EE:FF"
+            value={macAddress}
+            onChangeText={setMacAddress}
+            autoCapitalize="characters"
+          />
+          <Text style={styles.hint}>
+            The Bluetooth MAC address printed on your HM-10 or JDY-08 module
+          </Text>
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Lock PIN (4 digits)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., 1234"
+            value={lockPin}
+            onChangeText={setLockPin}
+            keyboardType="numeric"
+            maxLength={4}
+            secureTextEntry
+          />
+          <Text style={styles.hint}>
+            The 4-digit auth PIN programmed into your STM8 firmware
+          </Text>
+        </View>
+
         <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>📍 Initial Location</Text>
+          <Text style={styles.infoTitle}>📡 BLE Lock Setup</Text>
           <Text style={styles.infoText}>
-            Your cycle will be placed at the Karunya campus center initially.
-            The GPS will update the location automatically when the lock is active.
+            Your cycle uses a Bluetooth Low Energy (BLE) smart lock. The app connects 
+            directly to the lock via Bluetooth — no Wi-Fi needed on the lock hardware.
+            {'\n\n'}
+            Make sure the HM-10/JDY-08 module is powered on and the STM8 is flashed 
+            with the correct firmware and PIN.
           </Text>
         </View>
 

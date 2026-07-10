@@ -1,7 +1,6 @@
 import { doc, updateDoc, getDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { CYCLE_STATUS } from '../constants';
-import { lockCycle, updateEndAlert } from './lockService';
 import { stopLocationTracking } from './locationService';
 
 // Check if cycle availability has expired and mark as NOT_AVAILABLE
@@ -74,6 +73,9 @@ export const checkAndExpireRental = async (cycleId) => {
 };
 
 // Complete an expired rental automatically
+// NOTE: With the BLE architecture, we CANNOT send a lock command remotely.
+// The physical lock remains in its current state until the user is near the cycle.
+// We only update Firestore status and create rental history.
 const completeExpiredRental = async (cycleId, cycle) => {
   try {
     const cycleRef = doc(db, 'cycles', cycleId);
@@ -93,17 +95,16 @@ const completeExpiredRental = async (cycleId, cycle) => {
       rentedAt: cycle.rentedAt,
       completedAt: new Date().toISOString(),
       autoCompleted: true,
+      autoLocked: false, // BLE lock not engaged — user must lock manually when near cycle
       rating: null,
       review: null
     });
     
-    // Lock the cycle
-    await lockCycle(cycle.lockCode);
-    
-    // Clear end alert
-    await updateEndAlert(cycle.lockCode, false);
+    // Stop location tracking
+    stopLocationTracking();
     
     // Update cycle status to available
+    // Note: Physical lock state is unknown — it stays as-is until user interacts via BLE
     await updateDoc(cycleRef, {
       status: CYCLE_STATUS.AVAILABLE,
       currentRenter: null,
@@ -117,7 +118,7 @@ const completeExpiredRental = async (cycleId, cycle) => {
       availableUntil: null
     });
     
-    console.log(`Rental auto-completed for cycle ${cycleId}`);
+    console.log(`Rental auto-completed for cycle ${cycleId} (BLE lock NOT engaged — requires proximity)`);
     return true;
   } catch (error) {
     console.error('Error completing expired rental:', error);

@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc, onSnapshot } from 'firebase/firestore';
-import { ref, onValue } from 'firebase/database';
-import { db, realtimeDb } from '../config/firebase';
+import { collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
-import { CYCLE_STATUS, LOCK_STATUS } from '../constants';
-import { lockCycle, unlockCycle, updateEndAlert } from '../services/lockService';
-import { stopLocationTracking, getCurrentLocation } from '../services/locationService';
+import { CYCLE_STATUS } from '../constants';
+import { lockCycle, unlockCycle, disconnectLock } from '../services/lockService';
+import { startLocationTracking, stopLocationTracking, getCurrentLocation } from '../services/locationService';
 import { checkGeofence } from '../services/geofenceService';
 import { checkAndExpireRental } from '../services/expirationService';
 
@@ -21,8 +20,9 @@ export default function MyRental() {
   const [review, setReview] = useState('');
   const [geofenceWarning, setGeofenceWarning] = useState(null);
   const [expirationCheckInterval, setExpirationCheckInterval] = useState(null);
-  const [batteryLevel, setBatteryLevel] = useState(null);
   const [lockActionLoading, setLockActionLoading] = useState(false);
+  const [bleStatus, setBleStatus] = useState('');
+  const [currentLocation, setCurrentLocation] = useState(null);
 
   useEffect(() => {
     loadActiveRental();
@@ -35,13 +35,19 @@ export default function MyRental() {
     };
   }, []);
 
+  // Start location tracking and monitoring when rental is loaded
   useEffect(() => {
-    // Monitor geofence and expiration for active rental
     if (rental) {
+      // Start phone GPS tracking → Firestore
+      startLocationTracking(rental.id).catch((err) => {
+        console.warn('Failed to start location tracking:', err);
+      });
+
       // Check geofence every 30 seconds
       const geofenceInterval = setInterval(async () => {
         try {
           const location = await getCurrentLocation();
+          setCurrentLocation(location);
           const geofenceStatus = checkGeofence(location.latitude, location.longitude);
           
           if (geofenceStatus.isViolation) {
@@ -56,32 +62,14 @@ export default function MyRental() {
 
       // Check expiration every minute
       const expInterval = setInterval(async () => {
-        // Check if rental has expired
         const expired = await checkAndExpireRental(rental.id);
         if (expired) {
-          // Clear end alert when rental expires
-          await updateEndAlert(rental.lockCode, false);
           Alert.alert(
             'Rental Expired',
-            'Your rental time has ended. The cycle has been locked automatically.',
+            'Your rental time has ended. Please lock the cycle manually by going near it.',
             [{ text: 'OK', onPress: () => router.replace('/map') }]
           );
           return;
-        }
-        
-        // Check remaining time and update endAlert
-        if (rental.rentalEndTime) {
-          const endTime = new Date(rental.rentalEndTime);
-          const now = new Date();
-          const remainingMs = endTime - now;
-          const remainingMinutes = Math.floor(remainingMs / 60000);
-          
-          // Update endAlert based on remaining time
-          if (remainingMinutes < 2 && remainingMinutes >= 0) {
-            await updateEndAlert(rental.lockCode, true);
-          } else {
-            await updateEndAlert(rental.lockCode, false);
-          }
         }
       }, 60000);
 
@@ -90,21 +78,10 @@ export default function MyRental() {
       return () => {
         clearInterval(geofenceInterval);
         clearInterval(expInterval);
+        stopLocationTracking();
       };
     }
   }, [rental]);
-
-  // Store battery listener unsubscribe function
-  const [batteryUnsubscribe, setBatteryUnsubscribe] = useState(null);
-
-  // Cleanup battery listener on unmount
-  useEffect(() => {
-    return () => {
-      if (batteryUnsubscribe) {
-        batteryUnsubscribe();
-      }
-    };
-  }, [batteryUnsubscribe]);
 
   const loadActiveRental = async () => {
     try {
@@ -122,31 +99,6 @@ export default function MyRental() {
         const cycleDoc = querySnapshot.docs[0];
         const rentalData = { id: cycleDoc.id, ...cycleDoc.data() };
         setRental(rentalData);
-        
-        // Immediate check for endAlert based on remaining time
-        if (rentalData.rentalEndTime && rentalData.lockCode) {
-          const endTime = new Date(rentalData.rentalEndTime);
-          const now = new Date();
-          const remainingMs = endTime - now;
-          const remainingMinutes = Math.floor(remainingMs / 60000);
-          
-          // Set endAlert if less than 2 minutes remaining
-          if (remainingMinutes < 2 && remainingMinutes >= 0) {
-            updateEndAlert(rentalData.lockCode, true);
-          } else {
-            updateEndAlert(rentalData.lockCode, false);
-          }
-        }
-        
-        // Listen to battery updates from Realtime Database
-        if (rentalData.lockCode) {
-          const batteryRef = ref(realtimeDb, `/locks/${rentalData.lockCode}/battery`);
-          const unsub = onValue(batteryRef, (snapshot) => {
-            const battery = snapshot.val();
-            setBatteryLevel(battery);
-          });
-          setBatteryUnsubscribe(() => unsub);
-        }
       }
     } catch (error) {
       console.error('Error loading rental:', error);
@@ -156,26 +108,42 @@ export default function MyRental() {
   };
 
   const handleLockCycle = async () => {
+    if (!rental.macAddress || !rental.lockPin) {
+      Alert.alert('Error', 'BLE lock credentials not found for this cycle.');
+      return;
+    }
+
     setLockActionLoading(true);
+    setBleStatus('Connecting to lock...');
     try {
-      await lockCycle(rental.lockCode);
+      await lockCycle(rental.macAddress, rental.lockPin);
+      setBleStatus('');
       Alert.alert('Success', 'Cycle locked successfully!');
     } catch (error) {
       console.error('Error locking cycle:', error);
-      Alert.alert('Error', 'Failed to lock cycle. Please try again.');
+      setBleStatus('');
+      Alert.alert('Lock Failed', `Could not lock the cycle. ${error.message}\n\nMake sure you are within ~10m of the cycle.`);
     } finally {
       setLockActionLoading(false);
     }
   };
 
   const handleUnlockCycle = async () => {
+    if (!rental.macAddress || !rental.lockPin) {
+      Alert.alert('Error', 'BLE lock credentials not found for this cycle.');
+      return;
+    }
+
     setLockActionLoading(true);
+    setBleStatus('Connecting to lock...');
     try {
-      await unlockCycle(rental.lockCode);
+      await unlockCycle(rental.macAddress, rental.lockPin);
+      setBleStatus('');
       Alert.alert('Success', 'Cycle unlocked successfully!');
     } catch (error) {
       console.error('Error unlocking cycle:', error);
-      Alert.alert('Error', 'Failed to unlock cycle. Please try again.');
+      setBleStatus('');
+      Alert.alert('Unlock Failed', `Could not unlock the cycle. ${error.message}\n\nMake sure you are within ~10m of the cycle.`);
     } finally {
       setLockActionLoading(false);
     }
@@ -184,7 +152,7 @@ export default function MyRental() {
   const handleCompleteRide = () => {
     Alert.alert(
       'Complete Ride',
-      'Are you sure you want to complete this ride?',
+      'Are you sure you want to complete this ride? Make sure you are near the cycle to lock it via Bluetooth.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Complete', onPress: () => setShowReview(true) }
@@ -201,12 +169,41 @@ export default function MyRental() {
     setCompleting(true);
     try {
       const user = await getUserData();
-      
-      // Step 1: Lock the cycle
-      await lockCycle(rental.lockCode);
 
-      // Step 2: Clear end alert
-      await updateEndAlert(rental.lockCode, false);
+      // Step 1: Lock the cycle via BLE
+      if (rental.macAddress && rental.lockPin) {
+        setBleStatus('Locking cycle via Bluetooth...');
+        try {
+          await lockCycle(rental.macAddress, rental.lockPin);
+          setBleStatus('Cycle locked!');
+        } catch (bleError) {
+          console.warn('BLE lock failed during ride completion:', bleError);
+          // Ask user if they want to continue without locking
+          const continueWithout = await new Promise((resolve) => {
+            Alert.alert(
+              'Lock Failed',
+              'Could not lock the cycle via Bluetooth. The cycle may remain physically unlocked.\n\nDo you want to complete the ride anyway?',
+              [
+                { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+                { text: 'Complete Anyway', onPress: () => resolve(true) }
+              ]
+            );
+          });
+          if (!continueWithout) {
+            setCompleting(false);
+            setBleStatus('');
+            return;
+          }
+        }
+      }
+
+      // Step 2: Get final GPS location as parked location
+      let parkedLocation = null;
+      try {
+        parkedLocation = await getCurrentLocation();
+      } catch (locError) {
+        console.warn('Could not get final location:', locError);
+      }
 
       // Step 3: Stop location tracking
       stopLocationTracking();
@@ -230,9 +227,9 @@ export default function MyRental() {
         autoCompleted: false
       });
 
-      // Step 5: Update cycle status back to available
+      // Step 5: Update cycle status back to available with parked location
       const cycleRef = doc(db, 'cycles', rental.id);
-      await updateDoc(cycleRef, {
+      const updateData = {
         status: CYCLE_STATUS.AVAILABLE,
         currentRenter: null,
         currentRenterName: null,
@@ -243,11 +240,26 @@ export default function MyRental() {
         rentalEndTime: null,
         availableMinutes: 0,
         availableUntil: null
-      });
+      };
+
+      // Save final GPS as the cycle's parked location
+      if (parkedLocation) {
+        updateData.location = {
+          latitude: parkedLocation.latitude,
+          longitude: parkedLocation.longitude
+        };
+        updateData.lastLocationUpdate = new Date().toISOString();
+      }
+
+      await updateDoc(cycleRef, updateData);
+
+      // Step 6: Disconnect BLE
+      await disconnectLock();
+      setBleStatus('');
 
       Alert.alert(
         'Thank You!',
-        'Cycle locked! Ride completed successfully. Thank you for your review!',
+        'Ride completed successfully. Thank you for your review!',
         [{ text: 'OK', onPress: () => router.replace('/map') }]
       );
     } catch (error) {
@@ -255,6 +267,7 @@ export default function MyRental() {
       Alert.alert('Error', 'Failed to complete ride. Please try again.');
     } finally {
       setCompleting(false);
+      setBleStatus('');
     }
   };
 
@@ -316,13 +329,21 @@ export default function MyRental() {
             />
           </View>
 
+          {/* BLE Status during completion */}
+          {bleStatus !== '' && (
+            <View style={styles.bleStatusBox}>
+              <ActivityIndicator size="small" color="#1e40af" />
+              <Text style={styles.bleStatusText}>{bleStatus}</Text>
+            </View>
+          )}
+
           <TouchableOpacity 
             style={[styles.button, completing && styles.buttonDisabled]}
             onPress={submitReview}
             disabled={completing}
           >
             <Text style={styles.buttonText}>
-              {completing ? 'Submitting...' : 'Submit Review'}
+              {completing ? 'Completing Ride...' : 'Submit & Lock Cycle'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -369,26 +390,22 @@ export default function MyRental() {
             </Text>
           </View>
 
-          {batteryLevel !== null && batteryLevel !== undefined && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Battery:</Text>
-              <View style={styles.batteryRow}>
-                <Text style={styles.batteryIcon}>
-                  {batteryLevel >= 60 ? '🔋' : batteryLevel >= 30 ? '🔋' : '🪫'}
-                </Text>
-                <Text style={[
-                  styles.batteryValue,
-                  { color: batteryLevel >= 60 ? '#10b981' : batteryLevel >= 30 ? '#f59e0b' : '#ef4444' }
-                ]}>
-                  {batteryLevel}%
-                </Text>
-              </View>
-            </View>
-          )}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Connection:</Text>
+            <Text style={styles.infoValue}>📡 Bluetooth (BLE)</Text>
+          </View>
 
           <View style={styles.timeBox}>
             <Text style={styles.timeText}>{timeRemaining()}</Text>
           </View>
+
+          {/* BLE Status Indicator */}
+          {bleStatus !== '' && (
+            <View style={styles.bleStatusBox}>
+              <ActivityIndicator size="small" color="#1e40af" />
+              <Text style={styles.bleStatusText}>{bleStatus}</Text>
+            </View>
+          )}
 
           <View style={styles.lockControls}>
             <TouchableOpacity 
@@ -408,6 +425,12 @@ export default function MyRental() {
             </TouchableOpacity>
           </View>
 
+          <View style={styles.bleHintBox}>
+            <Text style={styles.bleHintText}>
+              📡 Lock/Unlock requires Bluetooth proximity (~10m)
+            </Text>
+          </View>
+
           {geofenceWarning && (
             <View style={styles.warningBox}>
               <Text style={styles.warningIcon}>⚠️</Text>
@@ -421,7 +444,7 @@ export default function MyRental() {
           style={styles.completeButton}
           onPress={handleCompleteRide}
         >
-          <Text style={styles.completeButtonText}>Complete Ride</Text>
+          <Text style={styles.completeButtonText}>End Ride & Lock Cycle</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -528,6 +551,32 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1e40af',
   },
+  bleStatusBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dbeafe',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 10,
+  },
+  bleStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  bleHintBox: {
+    backgroundColor: '#f0f9ff',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  bleHintText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    textAlign: 'center',
+  },
   lockControls: {
     flexDirection: 'row',
     gap: 12,
@@ -630,18 +679,6 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginBottom: 12,
-  },
-  batteryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  batteryIcon: {
-    fontSize: 18,
-  },
-  batteryValue: {
-    fontSize: 16,
-    fontWeight: '600',
   },
   reportButtonText: {
     color: '#f59e0b',

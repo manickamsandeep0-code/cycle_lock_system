@@ -14,12 +14,12 @@ export const startLocationTracking = async (cycleId) => {
       throw new Error('Location permission denied');
     }
 
-    // Watch position every 30 seconds
+    // Watch position every 10 seconds (phone provides GPS in BLE bridge model)
     locationSubscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
-        timeInterval: 30000, // Update every 30 seconds
-        distanceInterval: 10, // Or every 10 meters
+        timeInterval: 10000, // Update every 10 seconds
+        distanceInterval: 5, // Or every 5 meters
       },
       async (location) => {
         const { latitude, longitude } = location.coords;

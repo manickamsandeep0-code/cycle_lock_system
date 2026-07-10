@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { doc, updateDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { ref, set } from 'firebase/database';
-import { db, realtimeDb } from '../config/firebase';
+import { db } from '../config/firebase';
 import { getUserData } from '../utils/storage';
 import { CYCLE_STATUS } from '../constants';
-import { updateEndAlert } from '../services/lockService';
+import { unlockCycle } from '../services/lockService';
+import { startLocationTracking } from '../services/locationService';
 
 export default function RentCycle() {
   const router = useRouter();
@@ -33,6 +33,7 @@ export default function RentCycle() {
   const requestedDuration = params.requestedDuration ? parseInt(params.requestedDuration) : 60;
   
   const [loading, setLoading] = useState(false);
+  const [bleStatus, setBleStatus] = useState(''); // BLE connection status for UI feedback
 
   const handleRent = async () => {
     setLoading(true);
@@ -75,11 +76,38 @@ export default function RentCycle() {
         return;
       }
 
-      // Step 1: Update cycle status in Firestore
+      // Step 1: Fetch BLE credentials from Firestore
+      const macAddress = currentCycleData.macAddress;
+      const lockPin = currentCycleData.lockPin;
+
+      if (!macAddress || !lockPin) {
+        Alert.alert('Error', 'This cycle does not have BLE lock credentials configured. Please contact the owner.');
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: Connect via BLE and send unlock command
+      setBleStatus('Scanning for lock...');
+      try {
+        setBleStatus('Connecting to lock...');
+        await unlockCycle(macAddress, lockPin);
+        setBleStatus('Lock unlocked!');
+      } catch (bleError) {
+        console.error('BLE unlock error:', bleError);
+        Alert.alert(
+          'Unlock Failed',
+          `Could not unlock the cycle via Bluetooth. ${bleError.message}\n\nMake sure you are within ~10m of the cycle and Bluetooth is enabled.`
+        );
+        setLoading(false);
+        setBleStatus('');
+        return;
+      }
+
+      // Step 3: Update cycle status in Firestore (only after successful BLE unlock)
       const rentalEndTime = new Date();
       rentalEndTime.setMinutes(rentalEndTime.getMinutes() + requestedDuration);
       
-      // Calculate rental price (you can adjust the rate)
+      // Calculate rental price
       const pricePerHour = 10; // ₹10 per hour
       const rentalPrice = Math.ceil((requestedDuration / 60) * pricePerHour);
       
@@ -94,16 +122,13 @@ export default function RentCycle() {
         rentalEndTime: rentalEndTime.toISOString()
       });
 
-      // Step 2: Write unlock command to Realtime Database
-      const commandRef = ref(realtimeDb, `/locks/${cycle.lockCode}/command`);
-      await set(commandRef, {
-        action: "UNLOCK",
-        executed: false,
-        timestamp: Date.now()
-      });
-
-      // Step 3: Initialize endAlert to false
-      await updateEndAlert(cycle.lockCode, false);
+      // Step 4: Start location tracking (phone GPS → Firestore)
+      try {
+        await startLocationTracking(cycle.id);
+      } catch (locError) {
+        console.warn('Location tracking failed to start:', locError);
+        // Non-fatal — ride can continue without tracking
+      }
 
       Alert.alert(
         'Success!',
@@ -112,9 +137,10 @@ export default function RentCycle() {
       );
     } catch (error) {
       console.error('Error renting cycle:', error);
-      Alert.alert('Error', 'Failed to unlock cycle. Please try again.');
+      Alert.alert('Error', 'Failed to rent cycle. Please try again.');
     } finally {
       setLoading(false);
+      setBleStatus('');
     }
   };
 
@@ -135,12 +161,30 @@ export default function RentCycle() {
               <Text style={styles.infoValue}>{cycle.ownerName}</Text>
             </View>
           )}
-          {cycle.battery && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Battery:</Text>
-              <Text style={styles.infoValue}>{cycle.battery}%</Text>
-            </View>
-          )}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Duration:</Text>
+            <Text style={styles.infoValue}>{requestedDuration} minutes</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Connection:</Text>
+            <Text style={styles.infoValue}>Bluetooth (BLE)</Text>
+          </View>
+        </View>
+
+        {/* BLE Status Indicator */}
+        {bleStatus !== '' && (
+          <View style={styles.bleStatusBox}>
+            <ActivityIndicator size="small" color="#1e40af" />
+            <Text style={styles.bleStatusText}>{bleStatus}</Text>
+          </View>
+        )}
+
+        <View style={styles.bleInfoBox}>
+          <Text style={styles.bleInfoTitle}>📡 Bluetooth Required</Text>
+          <Text style={styles.bleInfoText}>
+            Make sure you are within ~10 meters of the cycle and Bluetooth is turned on. 
+            The app will connect directly to the cycle's smart lock.
+          </Text>
         </View>
 
         <TouchableOpacity 
@@ -149,7 +193,7 @@ export default function RentCycle() {
           disabled={loading}
         >
           <Text style={styles.buttonText}>
-            {loading ? 'Unlocking...' : 'Unlock Cycle'}
+            {loading ? 'Connecting & Unlocking...' : 'Unlock Cycle'}
           </Text>
         </TouchableOpacity>
 
@@ -187,7 +231,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 8,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
@@ -204,6 +248,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
+  },
+  bleStatusBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dbeafe',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 10,
+  },
+  bleStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  bleInfoBox: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 24,
+  },
+  bleInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+    marginBottom: 4,
+  },
+  bleInfoText: {
+    fontSize: 13,
+    color: '#3b82f6',
+    lineHeight: 18,
   },
   button: {
     backgroundColor: '#1e40af',

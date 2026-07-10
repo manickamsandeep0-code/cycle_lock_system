@@ -1,416 +1,329 @@
-# 🎉 Karunya Cycle Rental System - Project Complete!
+# Karunya Cycle Rental System
 
-## ✅ What Has Been Created
+## Project Draft
 
-Your complete **Cycle Rental System** for Karunya Institute of Technology is ready!
+The Karunya Cycle Rental System is an IoT-enabled campus bicycle sharing platform built for Karunya Institute of Technology. It combines a React Native mobile app, Firebase backend services, and an ESP8266-based smart lock to support real-time cycle discovery, rental, locking, unlocking, and live tracking.
 
----
+The system is designed around two user roles: owners and renters. Owners register their cycle lock, publish availability windows, and monitor cycle status. Renters browse available cycles on a live map, inspect cycle details, start a rental, and interact with the lock during the ride. The project also includes damage reporting, review submission, geofence monitoring, battery tracking, and automatic expiration of cycle availability.
 
-## 📦 Deliverables
+## 1. Project Objective
 
-### 1. React Native Mobile Application
-✅ **6 Screens** - Login, Register, Map, Lock Registration, Cycle Details  
-✅ **Role-Based Access** - Owner and Renter modes  
-✅ **Real-Time Updates** - Firebase integration  
-✅ **Interactive Map** - Centered on Karunya campus  
-✅ **Remote Unlock** - One-tap cycle rental  
+The main goal of the project is to digitize campus cycle sharing with live hardware control and centralized status management. The system aims to:
 
-### 2. Arduino IoT Lock System
-✅ **Complete Arduino Code** - GSM + GPS + Lock control  
-✅ **Real-Time Location** - Updates every 10 seconds  
-✅ **Remote Communication** - Firebase integration  
-✅ **Hardware Diagrams** - Circuit assembly guide  
+- make cycles discoverable on a campus map in real time
+- allow owners to control whether a cycle is available for rent
+- allow renters to start and complete rides through the app
+- connect the app to a physical lock using an IoT device
+- keep the database synchronized with live lock and location updates
+- prevent invalid rentals by checking availability, duration, and current status
 
-### 3. Comprehensive Documentation
-✅ **11 Documentation Files** - Setup, guides, references  
-✅ **Step-by-Step Tutorials** - Firebase, Hardware, App  
-✅ **Troubleshooting Guides** - Common issues solved  
-✅ **Quick Reference Card** - Essential info at a glance  
+## 2. Problem Statement
 
-### 4. Development Tools
-✅ **Automated Setup Scripts** - Windows & Linux/Mac  
-✅ **Configuration Templates** - Firebase, Maps, Arduino  
-✅ **Project Structure Guide** - Code organization  
+Manual cycle sharing systems often suffer from poor visibility, lack of accountability, and no live tracking. Users cannot easily know whether a cycle is available, how long it will stay available, or whether the lock has actually responded to a rental request. This project addresses those issues by creating a connected rental system with a single source of truth for status, live map tracking, and automated ride completion logic.
 
----
+## 3. System Overview
 
-## 📁 Complete File List
+The project is split into three major parts:
 
-### Root Files (12)
-- ✅ `.gitignore` - Git exclusions
-- ✅ `app.json` - Expo configuration
-- ✅ `babel.config.js` - Babel setup
-- ✅ `package.json` - Dependencies
-- ✅ `tailwind.config.js` - Styling config
-- ✅ `tsconfig.json` - TypeScript config
-- ✅ `README.md` - Main documentation
-- ✅ `QUICKSTART.md` - Quick setup guide
-- ✅ `PROJECT_SUMMARY.md` - Complete overview
-- ✅ `PROJECT_STRUCTURE.md` - File organization
-- ✅ `REFERENCE.md` - Quick reference
-- ✅ `INDEX.md` - Documentation index
+### Mobile Application
 
-### Setup Scripts (2)
-- ✅ `setup.bat` - Windows setup
-- ✅ `setup.sh` - Linux/Mac setup
+Built with React Native and Expo Router, the app handles registration, login, map browsing, rental flow, ride completion, review submission, damage reporting, and owner dashboards.
 
-### App Directory (6 files)
-- ✅ `app/_layout.js` - Navigation layout
-- ✅ `app/index.js` - Entry point
-- ✅ `app/login.js` - Login screen
-- ✅ `app/register.js` - Registration screen
-- ✅ `app/map.js` - Main map screen
-- ✅ `app/owner/register-lock.js` - Lock registration
+### Cloud Backend
 
-### Components (1 file)
-- ✅ `components/CycleDetailsModal.js` - Cycle modal
+Firebase Firestore stores the main application data such as users, cycles, rentals, reviews, and history. Firebase Realtime Database stores live lock data such as GPS coordinates, battery status, commands, and lock status updates.
 
-### Configuration (1 file)
-- ✅ `config/firebase.js` - Firebase setup
+### IoT Lock Controller
 
-### Constants (1 file)
-- ✅ `constants/index.js` - App constants
+An ESP8266 NodeMCU-based lock reads GPS data, connects to Firebase over WiFi, receives lock/unlock commands, controls the relay, and publishes live location updates.
 
-### Utilities (1 file)
-- ✅ `utils/storage.js` - Storage helpers
+## 4. Key Features
 
-### Arduino (1 file)
-- ✅ `arduino/cycle_lock_system.ino` - Complete sketch
+### For Renters
 
-### Documentation (6 files)
-- ✅ `docs/FIREBASE_SETUP.md` - Firebase guide
-- ✅ `docs/HARDWARE_SETUP.md` - Hardware guide
-- ✅ `docs/INSTALLATION.md` - Complete setup
-- ✅ `docs/APN_SETTINGS.md` - Carrier settings
-- ✅ `docs/ASSETS.md` - Icon creation
-- ✅ `assets/README.md` - Assets placeholder
+- phone number login and role-based access
+- interactive live map centered on Karunya campus
+- cycle detail modal with owner name, contact, battery, and availability time
+- duration-based filtering so users only see cycles that can support their selected rental duration
+- one-tap rental flow with automatic unlock command
+- lock and unlock buttons during an active rental
+- ride completion with review submission
+- damage reporting with photo upload support
+- time remaining display and warning handling near ride end
 
----
+### For Owners
 
-## 📊 Project Statistics
+- lock registration using a unique lock code
+- cycle naming and owner profile association
+- availability setting for a fixed time window
+- manual lock and unlock controls for the owner's cycle when it is not rented
+- live battery and location visibility in the owner dashboard
+- rental tracking and cycle status monitoring
+- prevention of availability changes while the cycle is actively rented
 
-| Metric | Count |
-|--------|-------|
-| **Total Files** | 32 |
-| **App Screens** | 6 |
-| **React Components** | 1 |
-| **Documentation Files** | 11 |
-| **Configuration Files** | 6 |
-| **Arduino Files** | 1 |
-| **Lines of Code** | ~2,500+ |
-| **Documentation Pages** | ~50+ |
+### Platform and Safety Features
 
----
+- Firestore used as the source of truth for cycle rental status
+- Realtime Database used for live hardware communication
+- automatic cycle availability expiration when time runs out
+- end-alert flag that becomes true when less than 2 minutes remain in a ride
+- geofence warnings during active rides
+- rental expiration checks and automatic ride completion
+- cleanup of realtime listeners to reduce memory leaks
+- validation before renting to avoid invalid state transitions
 
-## 🎯 Features Implemented
+## 5. Screens and Modules
 
-### User Management ✅
-- [x] Phone number registration
-- [x] Login/Logout
-- [x] Role selection (Owner/Renter)
-- [x] User data persistence
+### Application Screens
 
-### Map Interface ✅
-- [x] Interactive map centered on Karunya
-- [x] Real-time cycle markers
-- [x] Color-coded availability (green/red)
-- [x] Location permissions
-- [x] User location tracking
+- `app/index.js` - entry routing based on saved user data
+- `app/login.js` - phone-based login
+- `app/register.js` - new user registration with role selection
+- `app/map.js` - live map and cycle discovery screen
+- `app/rent-cycle.js` - rental confirmation and unlock action
+- `app/my-rental.js` - active rental control, review, and completion
+- `app/damage-report.js` - damage complaint submission with images
+- `app/owner/dashboard.js` - owner cycle dashboard
+- `app/owner/register-lock.js` - lock registration screen
+- `app/owner/set-availability.js` - owner availability timer setup
 
-### Owner Features ✅
-- [x] Register IoT lock
-- [x] Add cycle information
-- [x] View rental status
-- [x] Cycle availability toggle
+### Reusable Components
 
-### Renter Features ✅
-- [x] Browse available cycles
-- [x] View cycle details
-- [x] One-tap rental
-- [x] Remote unlock
-- [x] Owner contact information
+- `components/CycleDetailsModal.js` - cycle detail popup used from the map
+- `components/DurationSelectionModal.js` - rental duration picker shown before browsing
 
-### Hardware Integration ✅
-- [x] GPS location tracking
-- [x] GSM communication
-- [x] Real-time updates to Firebase
-- [x] Remote lock control
-- [x] Battery-efficient operation
+### Services
 
-### Backend ✅
-- [x] Firebase Firestore (main database)
-- [x] Firebase Realtime Database (live updates)
-- [x] Real-time synchronization
-- [x] Scalable architecture
+- `services/lockService.js` - lock/unlock commands and lock status helpers
+- `services/expirationService.js` - rental expiration and availability expiration
+- `services/locationService.js` - GPS tracking helpers
+- `services/geofenceService.js` - campus boundary checks
+- `services/damageReportService.js` - damage record handling
+- `services/otpService.js` - user profile / OTP-related flow helpers
 
----
+### Utilities
 
-## 🛠️ Technology Stack
+- `utils/storage.js` - local storage for user and role data
+- `utils/timeHelpers.js` - time calculations and formatting
+
+## 6. Current Technical Stack
 
 ### Frontend
-- ✅ React Native 0.74.0
-- ✅ Expo ~51.0.0
-- ✅ Expo Router ~3.5.0
-- ✅ react-native-maps 1.14.0
-- ✅ NativeWind 2.0.11
+
+- React Native 0.74.5
+- Expo 51
+- Expo Router 3.5
+- react-native-webview
+- expo-location
+- expo-image-picker
+- NativeWind
 
 ### Backend
-- ✅ Firebase 10.7.1
-- ✅ Firestore
-- ✅ Realtime Database
+
+- Firebase Firestore
+- Firebase Realtime Database
+- Firebase Admin dependencies for backend support
 
 ### Hardware
-- ✅ Arduino Uno/Nano
-- ✅ SIM800L GSM Module
-- ✅ Neo 6M GPS Module
-- ✅ Relay Module
-- ✅ Solenoid Lock
 
----
+- ESP8266 NodeMCU
+- Neo-6M GPS module
+- relay module
+- bicycle lock / solenoid mechanism
+- WiFi-based cloud communication
 
-## 📖 Documentation Breakdown
+## 7. Core Data Flow
 
-### Quick Start (2 docs)
-1. **QUICKSTART.md** - 5-minute setup
-2. **REFERENCE.md** - Quick reference card
+1. A user registers and is saved in Firestore and local storage.
+2. An owner registers a lock code and creates a cycle entry.
+3. The ESP8266 publishes live GPS and battery data to Realtime Database.
+4. The map screen merges Firestore cycle metadata with Realtime Database live data.
+5. A renter selects a cycle and requests a duration.
+6. The app validates availability, current rental state, and duration fit.
+7. The rental request writes an unlock command to Realtime Database.
+8. The ESP8266 executes the command, updates lock status, and marks the command executed.
+9. Rental expiration logic closes the ride automatically when the time ends.
+10. Availability expiration logic marks a cycle unavailable when its publishing window ends.
 
-### Detailed Guides (3 docs)
-1. **README.md** - Complete project doc
-2. **PROJECT_SUMMARY.md** - Full overview
-3. **docs/INSTALLATION.md** - Step-by-step setup
+## 8. Database Design
 
-### Configuration (2 docs)
-1. **docs/FIREBASE_SETUP.md** - Backend setup
-2. **docs/APN_SETTINGS.md** - Carrier config
+### Firestore Collections
 
-### Hardware (1 doc)
-1. **docs/HARDWARE_SETUP.md** - Circuit assembly
+#### `users`
 
-### Customization (1 doc)
-1. **docs/ASSETS.md** - Icon creation
+Stores registered app users.
 
-### Reference (2 docs)
-1. **PROJECT_STRUCTURE.md** - Code organization
-2. **INDEX.md** - Documentation index
+```json
+{
+  "name": "Student Name",
+  "registerNo": "REG12345",
+  "phoneNumber": "9876543210",
+  "role": "owner",
+  "createdAt": "2026-02-11T10:00:00.000Z"
+}
+```
 
----
+#### `cycles`
 
-## 🚀 Next Steps
+Stores cycle metadata and rental state.
 
-### Immediate (Required)
-1. ✅ Project is created ← **YOU ARE HERE**
-2. ⬜ Run `npm install` to install dependencies
-3. ⬜ Configure Firebase (see `docs/FIREBASE_SETUP.md`)
-4. ⬜ Add Google Maps API key to `app.json`
-5. ⬜ Run `npm start` to test app
+```json
+{
+  "lockCode": "LOCK_0002",
+  "cycleName": "Red Cycle",
+  "ownerId": "user_id",
+  "ownerName": "Owner Name",
+  "ownerPhone": "9876543210",
+  "status": "available",
+  "currentRenter": null,
+  "currentRenterName": null,
+  "currentRenterPhone": null,
+  "rentedAt": null,
+  "rentalDuration": null,
+  "rentalPrice": null,
+  "rentalEndTime": null,
+  "availableMinutes": 0,
+  "availableUntil": null,
+  "registeredAt": "2026-02-11T10:00:00.000Z"
+}
+```
 
-### Short Term (1-2 days)
-6. ⬜ Create custom app icons (see `docs/ASSETS.md`)
-7. ⬜ Assemble Arduino hardware (see `docs/HARDWARE_SETUP.md`)
-8. ⬜ Test on real devices
-9. ⬜ Register test users and cycles
+#### `rentalHistory`
 
-### Long Term (1-2 weeks)
-10. ⬜ Customize branding and colors
-11. ⬜ Add additional features (payment, ratings)
-12. ⬜ Deploy to production
-13. ⬜ Launch on campus
+Stores completed ride and review records.
 
----
+```json
+{
+  "cycleId": "cycle_doc_id",
+  "cycleName": "Red Cycle",
+  "lockCode": "LOCK_0002",
+  "ownerId": "owner_user_id",
+  "ownerName": "Owner Name",
+  "renterId": "renter_user_id",
+  "renterName": "Renter Name",
+  "renterPhone": "9876543210",
+  "rentedAt": "2026-02-11T10:00:00.000Z",
+  "completedAt": "2026-02-11T10:45:00.000Z",
+  "duration": 45,
+  "price": 10,
+  "rating": 5,
+  "review": "Good ride",
+  "autoCompleted": false
+}
+```
 
-## 📋 Pre-Deployment Checklist
+### Realtime Database
 
-Before launching:
+#### `locks/{lockCode}`
 
-### App Configuration
-- [ ] Firebase credentials updated
-- [ ] Google Maps API key added
-- [ ] App icon created (1024x1024)
-- [ ] Splash screen created (2048x2048)
-- [ ] App name customized
-- [ ] Brand colors updated
+Stores live hardware state.
 
-### Testing
-- [ ] Tested on Android device
-- [ ] Tested on iOS device (if available)
-- [ ] Registration flow tested
-- [ ] Login flow tested
-- [ ] Map displays correctly
-- [ ] Cycle markers visible
-- [ ] Rental process works
-- [ ] Lock unlocks successfully
+```json
+{
+  "status": {
+    "locked": true,
+    "online": true,
+    "endAlert": "false"
+  },
+  "battery": 87,
+  "lastUpdated": 1710000000000,
+  "location": {
+    "latitude": 10.9362,
+    "longitude": 76.7441
+  },
+  "command": {
+    "action": "UNLOCK",
+    "timestamp": 1710000000000,
+    "executed": true
+  }
+}
+```
 
-### Hardware
-- [ ] Arduino assembled
-- [ ] SIM card activated with data
-- [ ] GPS gets location fix
-- [ ] GSM connects to network
-- [ ] Lock mechanism tested
-- [ ] Battery life verified
+## 9. Important Business Rules
 
-### Backend
-- [ ] Firebase rules configured
-- [ ] Database security tested
-- [ ] API keys restricted
-- [ ] Backup strategy planned
+- A cycle can only be rented if its Firestore status is `available`.
+- A renter cannot start a second rental while already having an active rented cycle.
+- A cycle is shown on the map only if it is available.
+- If a user selects a duration, only cycles with enough remaining availability are shown.
+- If availability time expires, the cycle automatically becomes `not_available`.
+- If ride time is less than 2 minutes, `endAlert` becomes the string `"true"`.
+- When a ride ends manually or automatically, `endAlert` is reset to `"false"`.
+- Firestore status is the source of truth; the hardware lock status is supplementary live state.
 
-### Documentation
-- [ ] README customized
-- [ ] Setup instructions verified
-- [ ] Contact information added
-- [ ] Support process defined
+## 10. Hardware Draft
 
----
+The current hardware implementation uses an ESP8266 NodeMCU rather than a GSM-based controller. The lock controller:
 
-## 🎓 Learning Resources
+- connects to campus WiFi
+- reads GPS coordinates from the GPS module
+- sends location updates every 10 seconds
+- polls Firebase Realtime Database for lock/unlock commands
+- toggles the relay to open or close the lock
+- pushes live status, battery, and command execution state to the database
 
-### Recommended Reading Order
-1. Start: [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)
-2. Setup: [QUICKSTART.md](QUICKSTART.md)
-3. Details: [docs/INSTALLATION.md](docs/INSTALLATION.md)
-4. Reference: [REFERENCE.md](REFERENCE.md)
+### Core Hardware Behavior
 
-### For Developers
-- [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) - Code organization
-- React Native Docs: https://reactnative.dev/
-- Expo Docs: https://docs.expo.dev/
+- `LOCK` command turns the relay off and secures the lock
+- `UNLOCK` command turns the relay on temporarily to release the lock
+- after executing a command, the device marks the command as executed
+- the device also updates `status.locked`, `status.online`, and `status.endAlert`
 
-### For Hardware
-- [docs/HARDWARE_SETUP.md](docs/HARDWARE_SETUP.md) - Assembly
-- Arduino Reference: https://www.arduino.cc/reference/
+## 11. Current Reliability Improvements
 
-### For Firebase
-- [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) - Setup
-- Firebase Docs: https://firebase.google.com/docs
+Recent fixes included:
 
----
+- cleanup of realtime listeners to reduce memory leaks
+- removal of hardcoded status strings in app logic
+- prevention of invalid rentals caused by stale map state
+- availability expiration automation
+- end-of-ride alert support for the hardware
+- smoother WebView map updates without white-screen remounts
+- proper remaining-time calculation in the cycle details modal
+- safer rental validation and duplicate rental checks
 
-## 💡 Pro Tips
+## 12. Development and Run Instructions
 
-### Development
-- Use `npm start -- --clear` to clear cache
-- Test on real devices, not just emulators
-- Check Firebase console regularly
-- Monitor Arduino Serial output
-
-### Hardware
-- Use adequate power supply for SIM800L (2A minimum)
-- Place GPS antenna outdoors for best signal
-- Test lock mechanism 50+ times before deployment
-- Keep backup of Arduino code
-
-### Deployment
-- Test with multiple users simultaneously
-- Monitor Firebase usage and costs
-- Have backup cycles ready
-- Collect user feedback early
-
----
-
-## 🏆 Project Highlights
-
-### What Makes This Special
-- ✅ **Real-Time IoT** - Hardware + Software integration
-- ✅ **Educational** - Perfect for learning modern tech stack
-- ✅ **Practical** - Solves real campus problem
-- ✅ **Scalable** - Can grow to multiple campuses
-- ✅ **Modern** - Uses latest technologies
-- ✅ **Complete** - End-to-end solution
-
-### Technologies Learned
-- React Native mobile development
-- Firebase backend services
-- IoT hardware integration
-- GPS and GSM communication
-- Real-time database synchronization
-- Map integration
-- Role-based access control
-
----
-
-## 📞 Support & Resources
-
-### Documentation
-- All docs are in `docs/` folder
-- Quick reference: `REFERENCE.md`
-- Full index: `INDEX.md`
-
-### External Links
-- Firebase: https://console.firebase.google.com/
-- Google Cloud: https://console.cloud.google.com/
-- Expo: https://docs.expo.dev/
-- Arduino: https://www.arduino.cc/
-
-### Getting Help
-1. Check documentation first
-2. Review troubleshooting sections
-3. Test with Serial Monitor (hardware)
-4. Check Firebase console (backend)
-5. Review Expo error messages (app)
-
----
-
-## 🎉 Congratulations!
-
-You now have a **complete, production-ready** Cycle Rental System!
-
-### What You've Received:
-✅ Modern React Native app with 6 screens  
-✅ Complete Arduino IoT lock system  
-✅ Firebase backend integration  
-✅ 11 comprehensive documentation files  
-✅ Automated setup scripts  
-✅ Troubleshooting guides  
-✅ Quick reference materials  
-
-### Project Value:
-- **Learning**: Master React Native, Firebase, Arduino
-- **Portfolio**: Impressive full-stack + IoT project
-- **Impact**: Solve real campus transportation problem
-- **Scalability**: Can expand to entire university
-
----
-
-## 🚴 Ready to Launch!
+### Install Dependencies
 
 ```bash
-# Your journey starts here:
 npm install
+```
+
+### Run the App Locally
+
+```bash
 npm start
 ```
 
-**Follow the setup guides and you'll be running in 30 minutes!**
-
----
-
-## 📝 Final Notes
-
-- All code is commented and documented
-- Firebase security rules are included
-- Hardware schematics are detailed
-- Troubleshooting guides are comprehensive
-- Quick reference card is always handy
-
-**Made with ❤️ for Karunya Institute of Technology**
-
----
-
-## 📬 Quick Start Command
+### Build Android APK
 
 ```bash
-cd Cycleapp
-npm install
-# Update config/firebase.js with your credentials
-# Update app.json with your Google Maps API key
-npm start
+npx eas build --platform android --profile preview
 ```
 
-**That's it! Welcome to the future of campus cycle sharing! 🚴‍♂️**
+### Important Setup Requirements
 
----
+- configure Firebase credentials in `config/firebase.js`
+- add Google Maps API key in `app.config.js`
+- create or verify Firebase security rules
+- configure ESP8266 WiFi and Firebase credentials in `arduino/cycle_lock_system.ino`
 
-**Project Status: ✅ COMPLETE & READY FOR DEPLOYMENT**
+## 13. Project Summary
 
-**Last Updated: November 28, 2025**
+This project provides a complete smart cycle rental experience for a campus environment. It is not only a mobile app, but a connected system where cloud data, real-time hardware state, and ride workflow are synchronized. The result is a practical campus mobility platform with owner controls, renter controls, live tracking, automatic expiry, and lock automation.
 
-**Version: 1.0.0**
+## 14. Future Scope
+
+Possible enhancements include:
+
+- payment integration
+- push notifications for unlock, expiry, and end-alert events
+- richer analytics for owners
+- QR-based cycle check-in and check-out
+- stronger anti-abuse and device binding measures
+- multi-campus support
+- maintenance and service scheduling
+
+## 15. Final Note
+
+The current codebase already supports a working end-to-end rental flow with live map tracking, rental validation, hardware lock control, owner availability management, rental completion, damage reporting, and time-based automation.
