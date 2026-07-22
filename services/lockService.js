@@ -1,24 +1,33 @@
 /**
- * Lock Service — BLE-based lock/unlock operations
+ * Lock Service — Classic Bluetooth lock/unlock with PIN rotation support
  *
- * Refactored from Firebase RTDB command dispatch to direct BLE communication.
- * The React Native app now acts as the bridge between Firebase and the physical lock.
+ * Delegates to bluetoothService.js for HC-05 communication.
+ * Supports the Two-Generals PIN fallback and PIN change commands.
  */
 
-import { unlockCycleBLE, lockCycleBLE, disconnectDevice } from './bleService';
+import {
+  connectToDevice,
+  sendWithFallback,
+  changePinOnHardware,
+  disconnectDevice,
+  sendCommand,
+} from './bluetoothService';
+import { BT_CONFIG } from '../constants';
 
 /**
- * Send an unlock command to the cycle's BLE lock.
+ * Unlock the cycle via Classic Bluetooth with PIN fallback.
  *
- * @param {string} macAddress - BLE MAC address of the HM-10/JDY-08 module
- * @param {string} lockPin - 4-digit auth PIN for this lock
- * @returns {Promise<boolean>} - true if unlock was successful
+ * @param {string} macAddress - HC-05 Bluetooth MAC address
+ * @param {string} currentPin - Current PIN from Firestore authPin.currentPin
+ * @param {string} previousPin - Fallback PIN from Firestore authPin.previousPin
+ * @returns {Promise<{success: boolean, usedPin: string}>}
  */
-export const unlockCycle = async (macAddress, lockPin) => {
+export const unlockCycle = async (macAddress, currentPin, previousPin) => {
   try {
-    const success = await unlockCycleBLE(macAddress, lockPin);
-    console.log(`Unlock command sent successfully to ${macAddress}`);
-    return success;
+    await connectToDevice(macAddress);
+    const result = await sendWithFallback(currentPin, previousPin, BT_CONFIG.COMMANDS.UNLOCK);
+    console.log(`Cycle unlocked successfully (used ${result.usedPin === currentPin ? 'current' : 'previous'} PIN)`);
+    return result;
   } catch (error) {
     console.error('Error unlocking cycle:', error);
     throw error;
@@ -26,17 +35,19 @@ export const unlockCycle = async (macAddress, lockPin) => {
 };
 
 /**
- * Send a lock command to the cycle's BLE lock.
+ * Lock the cycle via Classic Bluetooth with PIN fallback.
  *
- * @param {string} macAddress - BLE MAC address of the HM-10/JDY-08 module
- * @param {string} lockPin - 4-digit auth PIN for this lock
- * @returns {Promise<boolean>} - true if lock was successful
+ * @param {string} macAddress - HC-05 Bluetooth MAC address
+ * @param {string} currentPin - Current PIN from Firestore authPin.currentPin
+ * @param {string} previousPin - Fallback PIN from Firestore authPin.previousPin
+ * @returns {Promise<{success: boolean, usedPin: string}>}
  */
-export const lockCycle = async (macAddress, lockPin) => {
+export const lockCycle = async (macAddress, currentPin, previousPin) => {
   try {
-    const success = await lockCycleBLE(macAddress, lockPin);
-    console.log(`Lock command sent successfully to ${macAddress}`);
-    return success;
+    await connectToDevice(macAddress);
+    const result = await sendWithFallback(currentPin, previousPin, BT_CONFIG.COMMANDS.LOCK);
+    console.log(`Cycle locked successfully (used ${result.usedPin === currentPin ? 'current' : 'previous'} PIN)`);
+    return result;
   } catch (error) {
     console.error('Error locking cycle:', error);
     throw error;
@@ -44,8 +55,48 @@ export const lockCycle = async (macAddress, lockPin) => {
 };
 
 /**
- * Disconnect from the BLE lock device.
- * Call this after completing a ride or when cleaning up.
+ * Change the PIN on the hardware.
+ * Used during ride completion for PIN rotation.
+ *
+ * @param {string} macAddress - HC-05 Bluetooth MAC address
+ * @param {string} oldPin - Current PIN on the hardware (may differ from Firestore if desync)
+ * @param {string} newPin - New PIN to set on hardware
+ * @returns {Promise<boolean>}
+ */
+export const changeLockPin = async (macAddress, oldPin, newPin) => {
+  try {
+    await connectToDevice(macAddress);
+    const success = await changePinOnHardware(oldPin, newPin);
+    console.log('Lock PIN changed successfully on hardware');
+    return success;
+  } catch (error) {
+    console.error('Error changing lock PIN:', error);
+    throw error;
+  }
+};
+
+/**
+ * Lock the cycle using a specific known PIN (no fallback).
+ * Used after PIN change when we know the exact new PIN.
+ *
+ * @param {string} pin - The PIN to use
+ * @returns {Promise<boolean>}
+ */
+export const lockWithPin = async (pin) => {
+  try {
+    const response = await sendCommand(`${pin}${BT_CONFIG.COMMANDS.LOCK}`);
+    if (response === 'ERR') {
+      throw new Error('Lock rejected the command with the new PIN.');
+    }
+    return true;
+  } catch (error) {
+    console.error('Error locking with specific PIN:', error);
+    throw error;
+  }
+};
+
+/**
+ * Disconnect from the Bluetooth lock device.
  */
 export const disconnectLock = async () => {
   try {

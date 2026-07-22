@@ -18,11 +18,9 @@ module.exports = {
       supportsTablet: true,
       bundleIdentifier: 'com.karunya.cyclerental',
       infoPlist: {
-        NSBluetoothAlwaysUsageDescription: 'Allow Karunya Cycle Rental to use Bluetooth to communicate with cycle smart locks.',
-        NSBluetoothPeripheralUsageDescription: 'Allow Karunya Cycle Rental to connect to BLE cycle locks for unlocking and locking.',
         NSLocationAlwaysAndWhenInUseUsageDescription: 'Allow Karunya Cycle Rental to track your location during active rides for live cycle tracking.',
         NSLocationWhenInUseUsageDescription: 'Allow Karunya Cycle Rental to use your location to show nearby cycles.',
-        UIBackgroundModes: ['location', 'bluetooth-central']
+        UIBackgroundModes: ['location']
       }
     },
     android: {
@@ -35,9 +33,10 @@ module.exports = {
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
         'ACCESS_BACKGROUND_LOCATION',
+        'BLUETOOTH',
+        'BLUETOOTH_ADMIN',
         'BLUETOOTH_SCAN',
-        'BLUETOOTH_CONNECT',
-        'BLUETOOTH_ADVERTISE'
+        'BLUETOOTH_CONNECT'
       ],
       versionCode: 1
     },
@@ -53,14 +52,6 @@ module.exports = {
           locationAlwaysAndWhenInUsePermission: 'Allow Karunya Cycle Rental to track your location during active rides for live cycle tracking.',
           isAndroidBackgroundLocationEnabled: true,
           isAndroidForegroundServiceEnabled: true
-        }
-      ],
-      [
-        'react-native-ble-plx',
-        {
-          isBackgroundEnabled: false,
-          modes: ['central'],
-          bluetoothAlwaysPermission: 'Allow Karunya Cycle Rental to use Bluetooth to communicate with cycle smart locks.'
         }
       ]
     ],

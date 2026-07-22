@@ -27,17 +27,21 @@ export const CYCLE_STATUS = {
   OFFLINE: 'offline',
 };
 
-// BLE Configuration for HM-10 / JDY-08 modules
-export const BLE_CONFIG = {
-  // Standard HM-10 UART Service UUID
-  HM10_SERVICE_UUID: '0000FFE0-0000-1000-8000-00805F9B34FB',
-  // Standard HM-10 UART Characteristic UUID (RX/TX)
-  HM10_CHARACTERISTIC_UUID: '0000FFE1-0000-1000-8000-00805F9B34FB',
-  // Scan timeout in milliseconds
-  SCAN_TIMEOUT: 10000,
-  // BLE command characters sent to STM8
+// Classic Bluetooth (HC-05) Configuration
+export const BT_CONFIG = {
+  // Connection timeout in milliseconds
+  CONNECT_TIMEOUT: 10000,
+  // Response timeout in milliseconds (wait for OK/ERR from STM8)
+  RESPONSE_TIMEOUT: 5000,
+  // UART command characters sent to STM8
   COMMANDS: {
     UNLOCK: 'U',
     LOCK: 'L',
+    CHANGE_PIN: 'C',
+  },
+  // PIN sync status values stored in Firestore authPin object
+  PIN_SYNC_STATUS: {
+    SYNCED: 'SYNCED',
+    PENDING: 'PENDING',
   },
 };

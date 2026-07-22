@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getUserData } from '../../utils/storage';
-import { CYCLE_STATUS } from '../../constants';
+import { CYCLE_STATUS, BT_CONFIG } from '../../constants';
 
 export default function RegisterLock() {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function RegisterLock() {
       return;
     }
     if (!macAddress.trim()) {
-      Alert.alert('Error', 'Please enter the BLE MAC Address of the HM-10/JDY-08 module');
+      Alert.alert('Error', 'Please enter the Bluetooth MAC Address of the HC-05 module');
       return;
     }
     if (!validateMacAddress(macAddress)) {
@@ -42,11 +42,11 @@ export default function RegisterLock() {
       return;
     }
     if (!lockPin.trim()) {
-      Alert.alert('Error', 'Please enter the 4-digit Lock PIN');
+      Alert.alert('Error', 'Please enter the 4-digit Auth PIN');
       return;
     }
     if (!validatePin(lockPin)) {
-      Alert.alert('Error', 'Lock PIN must be exactly 4 digits (0-9).');
+      Alert.alert('Error', 'Auth PIN must be exactly 4 digits (0-9).');
       return;
     }
 
@@ -67,7 +67,6 @@ export default function RegisterLock() {
       if (!querySnapshot.empty) {
         const existingCycle = querySnapshot.docs[0].data();
         
-        // If lock already has an owner, check if it's the same owner
         if (existingCycle.ownerId) {
           if (existingCycle.ownerId !== user.id) {
             Alert.alert('Error', 'This Lock Code is already registered to another owner.');
@@ -79,7 +78,8 @@ export default function RegisterLock() {
             return;
           }
         }
-        // Lock exists but no owner - update it with owner info and BLE credentials
+
+        // Lock exists but no owner — update it with owner info and BT credentials
         const cycleDocId = querySnapshot.docs[0].id;
         const cycleRef = doc(db, 'cycles', cycleDocId);
         
@@ -92,7 +92,12 @@ export default function RegisterLock() {
           ownerPhone: user.phoneNumber,
           cycleName: cycleName,
           macAddress: normalizedMac,
-          lockPin: lockPin,
+          // Store authPin as a structured object for PIN rotation
+          authPin: {
+            currentPin: lockPin,
+            previousPin: lockPin, // Initially both are the same
+            syncStatus: BT_CONFIG.PIN_SYNC_STATUS.SYNCED,
+          },
           status: CYCLE_STATUS.AVAILABLE,
           registeredAt: new Date().toISOString(),
         });
@@ -118,9 +123,9 @@ export default function RegisterLock() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Register Your BLE Lock</Text>
+        <Text style={styles.title}>Register Your Bluetooth Lock</Text>
         <Text style={styles.subtitle}>
-          Enter the details of your STM8 + BLE lock module
+          Enter the details of your STM8 + HC-05 lock module
         </Text>
 
         <View style={styles.inputContainer}>
@@ -151,21 +156,21 @@ export default function RegisterLock() {
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>BLE MAC Address</Text>
+          <Text style={styles.label}>HC-05 Bluetooth MAC Address</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g., AA:BB:CC:DD:EE:FF"
+            placeholder="e.g., 00:21:13:01:A4:5B"
             value={macAddress}
             onChangeText={setMacAddress}
             autoCapitalize="characters"
           />
           <Text style={styles.hint}>
-            The Bluetooth MAC address printed on your HM-10 or JDY-08 module
+            The Bluetooth MAC address of your HC-05 module. Find it by scanning in Android Bluetooth Settings.
           </Text>
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Lock PIN (4 digits)</Text>
+          <Text style={styles.label}>Auth PIN (4 digits)</Text>
           <TextInput
             style={styles.input}
             placeholder="e.g., 1234"
@@ -176,18 +181,18 @@ export default function RegisterLock() {
             secureTextEntry
           />
           <Text style={styles.hint}>
-            The 4-digit auth PIN programmed into your STM8 firmware
+            The 4-digit auth PIN programmed into your STM8 firmware. This PIN will be automatically rotated after each ride.
           </Text>
         </View>
 
         <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>📡 BLE Lock Setup</Text>
+          <Text style={styles.infoTitle}>📡 Classic Bluetooth Lock Setup</Text>
           <Text style={styles.infoText}>
-            Your cycle uses a Bluetooth Low Energy (BLE) smart lock. The app connects 
-            directly to the lock via Bluetooth — no Wi-Fi needed on the lock hardware.
+            Your cycle uses a Classic Bluetooth (HC-05) smart lock.
             {'\n\n'}
-            Make sure the HM-10/JDY-08 module is powered on and the STM8 is flashed 
-            with the correct firmware and PIN.
+            ⚡ The HC-05 must be paired in Android Bluetooth Settings first (default pairing PIN: 1234 or 0000).
+            {'\n\n'}
+            🔒 The auth PIN is automatically rotated after each ride for security — only the app can unlock the cycle.
           </Text>
         </View>
 
@@ -213,84 +218,20 @@ export default function RegisterLock() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-  },
-  content: {
-    padding: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e40af',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 24,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  hint: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
-  infoBox: {
-    backgroundColor: '#dbeafe',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 24,
-  },
-  infoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e40af',
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#1e40af',
-    lineHeight: 18,
-  },
-  button: {
-    backgroundColor: '#1e40af',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  buttonDisabled: {
-    backgroundColor: '#9ca3af',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#6b7280',
-    fontSize: 16,
-  },
+  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  content: { padding: 24 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1e40af', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: '#6b7280', marginBottom: 24 },
+  inputContainer: { marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12, fontSize: 16 },
+  hint: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
+  infoBox: { backgroundColor: '#dbeafe', padding: 16, borderRadius: 8, marginBottom: 24 },
+  infoTitle: { fontSize: 14, fontWeight: '600', color: '#1e40af', marginBottom: 4 },
+  infoText: { fontSize: 13, color: '#1e40af', lineHeight: 18 },
+  button: { backgroundColor: '#1e40af', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 12 },
+  buttonDisabled: { backgroundColor: '#9ca3af' },
+  buttonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
+  cancelButton: { padding: 16, alignItems: 'center' },
+  cancelButtonText: { color: '#6b7280', fontSize: 16 },
 });

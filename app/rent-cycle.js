@@ -33,7 +33,7 @@ export default function RentCycle() {
   const requestedDuration = params.requestedDuration ? parseInt(params.requestedDuration) : 60;
   
   const [loading, setLoading] = useState(false);
-  const [bleStatus, setBleStatus] = useState(''); // BLE connection status for UI feedback
+  const [btStatus, setBtStatus] = useState(''); // Bluetooth connection status for UI feedback
 
   const handleRent = async () => {
     setLoading(true);
@@ -76,30 +76,30 @@ export default function RentCycle() {
         return;
       }
 
-      // Step 1: Fetch BLE credentials from Firestore
+      // Step 1: Fetch Bluetooth credentials from Firestore
       const macAddress = currentCycleData.macAddress;
-      const lockPin = currentCycleData.lockPin;
+      const authPin = currentCycleData.authPin;
 
-      if (!macAddress || !lockPin) {
-        Alert.alert('Error', 'This cycle does not have BLE lock credentials configured. Please contact the owner.');
+      if (!macAddress || !authPin || !authPin.currentPin) {
+        Alert.alert('Error', 'This cycle does not have Bluetooth lock credentials configured. Please contact the owner.');
         setLoading(false);
         return;
       }
 
-      // Step 2: Connect via BLE and send unlock command
-      setBleStatus('Scanning for lock...');
+      // Step 2: Connect via Classic Bluetooth and send unlock command (with PIN fallback)
+      setBtStatus('Connecting to HC-05 lock...');
       try {
-        setBleStatus('Connecting to lock...');
-        await unlockCycle(macAddress, lockPin);
-        setBleStatus('Lock unlocked!');
-      } catch (bleError) {
-        console.error('BLE unlock error:', bleError);
+        setBtStatus('Sending unlock command...');
+        await unlockCycle(macAddress, authPin.currentPin, authPin.previousPin);
+        setBtStatus('Lock unlocked!');
+      } catch (btError) {
+        console.error('Bluetooth unlock error:', btError);
         Alert.alert(
           'Unlock Failed',
-          `Could not unlock the cycle via Bluetooth. ${bleError.message}\n\nMake sure you are within ~10m of the cycle and Bluetooth is enabled.`
+          `Could not unlock the cycle via Bluetooth. ${btError.message}\n\nMake sure:\n• You are near the cycle\n• Bluetooth is enabled\n• HC-05 is paired in Android Settings`
         );
         setLoading(false);
-        setBleStatus('');
+        setBtStatus('');
         return;
       }
 
@@ -122,9 +122,9 @@ export default function RentCycle() {
         rentalEndTime: rentalEndTime.toISOString()
       });
 
-      // Step 4: Start location tracking (phone GPS → Firestore)
+      // Step 4: Start location tracking (phone GPS → RTDB)
       try {
-        await startLocationTracking(cycle.id);
+        await startLocationTracking(cycle.id, cycle.lockCode);
       } catch (locError) {
         console.warn('Location tracking failed to start:', locError);
         // Non-fatal — ride can continue without tracking
@@ -140,7 +140,7 @@ export default function RentCycle() {
       Alert.alert('Error', 'Failed to rent cycle. Please try again.');
     } finally {
       setLoading(false);
-      setBleStatus('');
+      setBtStatus('');
     }
   };
 
@@ -167,23 +167,22 @@ export default function RentCycle() {
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Connection:</Text>
-            <Text style={styles.infoValue}>Bluetooth (BLE)</Text>
+            <Text style={styles.infoValue}>Bluetooth Classic (HC-05)</Text>
           </View>
         </View>
 
-        {/* BLE Status Indicator */}
-        {bleStatus !== '' && (
+        {/* Bluetooth Status Indicator */}
+        {btStatus !== '' && (
           <View style={styles.bleStatusBox}>
             <ActivityIndicator size="small" color="#1e40af" />
-            <Text style={styles.bleStatusText}>{bleStatus}</Text>
+            <Text style={styles.bleStatusText}>{btStatus}</Text>
           </View>
         )}
 
         <View style={styles.bleInfoBox}>
           <Text style={styles.bleInfoTitle}>📡 Bluetooth Required</Text>
           <Text style={styles.bleInfoText}>
-            Make sure you are within ~10 meters of the cycle and Bluetooth is turned on. 
-            The app will connect directly to the cycle's smart lock.
+            Make sure Bluetooth is turned on and the HC-05 module is paired in your Android Bluetooth Settings (default pairing PIN: 1234).
           </Text>
         </View>
 
