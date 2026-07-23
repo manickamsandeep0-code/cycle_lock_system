@@ -15,10 +15,75 @@
  * Classic Bluetooth requires manual pairing (default HC-05 PIN: 1234 or 0000).
  */
 
-import RNBluetoothClassic from 'react-native-bluetooth-classic';
+import { Platform, PermissionsAndroid } from 'react-native';
 import { BT_CONFIG } from '../constants';
 
+let RNBluetoothClassic = null;
 let connectedDevice = null;
+
+/**
+ * Lazily load the native module. This prevents a crash if the
+ * native module isn't linked (e.g., running in Expo Go).
+ */
+const getModule = () => {
+  if (!RNBluetoothClassic) {
+    try {
+      RNBluetoothClassic = require('react-native-bluetooth-classic').default;
+    } catch (e) {
+      console.error('[BT] Failed to load react-native-bluetooth-classic:', e);
+      throw new Error(
+        'Bluetooth Classic module not found. This app must be run as a development build, not Expo Go. Please rebuild with "npx expo run:android" or use an EAS build.'
+      );
+    }
+    if (!RNBluetoothClassic) {
+      throw new Error(
+        'Bluetooth Classic native module is null. Make sure you are running a development build that includes react-native-bluetooth-classic.'
+      );
+    }
+  }
+  return RNBluetoothClassic;
+};
+
+/**
+ * Request Bluetooth runtime permissions on Android 12+ (API 31+).
+ * Without these, connecting/scanning will silently fail.
+ */
+export const requestBluetoothPermissions = async () => {
+  if (Platform.OS !== 'android') return true;
+
+  try {
+    // Android 12+ requires BLUETOOTH_CONNECT and BLUETOOTH_SCAN at runtime
+    if (Platform.Version >= 31) {
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+
+      const allGranted = Object.values(granted).every(
+        v => v === PermissionsAndroid.RESULTS.GRANTED
+      );
+
+      if (!allGranted) {
+        console.warn('[BT] Not all Bluetooth permissions granted:', granted);
+        throw new Error(
+          'Bluetooth permissions are required. Please go to Settings > Apps > Karunya Cycle Rental > Permissions and grant Bluetooth and Location access.'
+        );
+      }
+
+      return true;
+    } else {
+      // Android < 12: Just need location
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    }
+  } catch (err) {
+    console.error('[BT] Permission request error:', err);
+    throw err;
+  }
+};
 
 /**
  * Check if Bluetooth is enabled on the device.
@@ -26,7 +91,8 @@ let connectedDevice = null;
  */
 export const isBluetoothEnabled = async () => {
   try {
-    return await RNBluetoothClassic.isBluetoothEnabled();
+    const mod = getModule();
+    return await mod.isBluetoothEnabled();
   } catch (error) {
     console.error('[BT] Error checking Bluetooth status:', error);
     return false;
@@ -40,7 +106,8 @@ export const isBluetoothEnabled = async () => {
  */
 export const requestBluetoothEnable = async () => {
   try {
-    return await RNBluetoothClassic.requestBluetoothEnabled();
+    const mod = getModule();
+    return await mod.requestBluetoothEnabled();
   } catch (error) {
     console.error('[BT] Error requesting Bluetooth enable:', error);
     throw new Error('Please enable Bluetooth manually in Settings.');
@@ -54,7 +121,8 @@ export const requestBluetoothEnable = async () => {
  */
 export const getPairedDevices = async () => {
   try {
-    const paired = await RNBluetoothClassic.getBondedDevices();
+    const mod = getModule();
+    const paired = await mod.getBondedDevices();
     return paired;
   } catch (error) {
     console.error('[BT] Error getting paired devices:', error);
@@ -70,6 +138,11 @@ export const getPairedDevices = async () => {
  */
 export const connectToDevice = async (macAddress) => {
   try {
+    const mod = getModule();
+
+    // Step 0: Request runtime permissions (critical for Android 12+)
+    await requestBluetoothPermissions();
+
     // Step 1: Check Bluetooth is on
     const enabled = await isBluetoothEnabled();
     if (!enabled) {
@@ -82,8 +155,8 @@ export const connectToDevice = async (macAddress) => {
     // Step 2: If already connected to this device, return it
     if (connectedDevice) {
       try {
-        const isConnected = await connectedDevice.isConnected();
-        if (isConnected && connectedDevice.address.toUpperCase() === macAddress.toUpperCase()) {
+        const connected = await connectedDevice.isConnected();
+        if (connected && connectedDevice.address.toUpperCase() === macAddress.toUpperCase()) {
           console.log('[BT] Already connected to device');
           return connectedDevice;
         }
@@ -95,20 +168,21 @@ export const connectToDevice = async (macAddress) => {
 
     // Step 3: Check if device is paired
     const pairedDevices = await getPairedDevices();
+    console.log('[BT] Paired devices:', pairedDevices.map(d => `${d.name} (${d.address})`));
+
     const targetDevice = pairedDevices.find(
       d => d.address.toUpperCase() === macAddress.toUpperCase()
     );
 
     if (!targetDevice) {
       throw new Error(
-        `HC-05 device (${macAddress}) is not paired. Please go to Android Bluetooth Settings, pair the device first (PIN: 1234), then try again.`
+        `HC-05 device (${macAddress}) is not paired.\n\nPlease:\n1. Open Android Settings > Bluetooth\n2. Scan for devices\n3. Pair with HC-05 (PIN: 1234)\n4. Then try again in this app`
       );
     }
 
-    // Step 4: Connect
+    // Step 4: Connect via RFCOMM
     console.log(`[BT] Connecting to ${targetDevice.name || targetDevice.address}...`);
-    connectedDevice = await RNBluetoothClassic.connectToDevice(macAddress, {
-      connectorType: 'rfcomm',
+    connectedDevice = await mod.connectToDevice(macAddress, {
       delimiter: '\n',
       charset: 'utf-8',
     });
@@ -135,8 +209,8 @@ export const sendCommand = async (commandString, timeoutMs = BT_CONFIG.RESPONSE_
   }
 
   try {
-    const isConnected = await connectedDevice.isConnected();
-    if (!isConnected) {
+    const connected = await connectedDevice.isConnected();
+    if (!connected) {
       throw new Error('Bluetooth connection lost. Please reconnect.');
     }
 
@@ -167,21 +241,49 @@ const waitForResponse = (timeoutMs) => {
       return;
     }
 
+    let subscription = null;
+
     const timeout = setTimeout(() => {
-      if (subscription) subscription.remove();
+      if (subscription) {
+        try { subscription.remove(); } catch (e) { /* ignore */ }
+      }
       // No response — assume success for HC-05 modules that don't echo back
-      console.log('[BT] No response received, assuming success');
+      console.log('[BT] No response received within timeout, assuming success');
       resolve('OK');
     }, timeoutMs);
 
-    const subscription = connectedDevice.onDataReceived((data) => {
-      clearTimeout(timeout);
-      if (subscription) subscription.remove();
+    try {
+      subscription = connectedDevice.onDataReceived((data) => {
+        clearTimeout(timeout);
+        if (subscription) {
+          try { subscription.remove(); } catch (e) { /* ignore */ }
+        }
 
-      const response = (data.data || '').trim();
-      console.log(`[BT] Response: ${response}`);
-      resolve(response);
-    });
+        const response = (data.data || '').trim();
+        console.log(`[BT] Response: ${response}`);
+        resolve(response);
+      });
+    } catch (subscriptionError) {
+      clearTimeout(timeout);
+      console.warn('[BT] Could not subscribe to data, using read() fallback');
+      // Fallback: try polling with read()
+      setTimeout(async () => {
+        try {
+          const available = await connectedDevice.available();
+          if (available > 0) {
+            const readData = await connectedDevice.read();
+            const response = (readData || '').trim();
+            console.log(`[BT] Read response: ${response}`);
+            resolve(response);
+          } else {
+            resolve('OK');
+          }
+        } catch (readErr) {
+          console.warn('[BT] Read fallback failed:', readErr);
+          resolve('OK');
+        }
+      }, 1000);
+    }
   });
 };
 
@@ -249,8 +351,8 @@ export const changePinOnHardware = async (oldPin, newPin) => {
 export const disconnectDevice = async () => {
   try {
     if (connectedDevice) {
-      const isConnected = await connectedDevice.isConnected();
-      if (isConnected) {
+      const connected = await connectedDevice.isConnected();
+      if (connected) {
         await connectedDevice.disconnect();
         console.log('[BT] Disconnected from device');
       }
@@ -282,4 +384,35 @@ export const isConnected = async () => {
 export const generateNewPin = () => {
   const pin = Math.floor(1000 + Math.random() * 9000).toString();
   return pin;
+};
+
+/**
+ * Diagnostic function — call this to debug connection issues.
+ * Returns a string with the current state of Bluetooth.
+ */
+export const getDiagnostics = async () => {
+  const lines = [];
+  try {
+    const mod = getModule();
+    lines.push('✅ Native module loaded');
+
+    const enabled = await mod.isBluetoothEnabled();
+    lines.push(enabled ? '✅ Bluetooth is ON' : '❌ Bluetooth is OFF');
+
+    const paired = await mod.getBondedDevices();
+    lines.push(`📋 Paired devices (${paired.length}):`);
+    paired.forEach(d => {
+      lines.push(`   - ${d.name || 'Unknown'} | ${d.address}`);
+    });
+
+    if (connectedDevice) {
+      const conn = await connectedDevice.isConnected();
+      lines.push(conn ? `✅ Connected to ${connectedDevice.address}` : '❌ Device object exists but not connected');
+    } else {
+      lines.push('⚪ No active connection');
+    }
+  } catch (err) {
+    lines.push(`❌ Error: ${err.message}`);
+  }
+  return lines.join('\n');
 };

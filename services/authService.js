@@ -1,13 +1,27 @@
 import { 
+  initializeAuth,
+  getReactNativePersistence,
   signInWithPhoneNumber, 
   PhoneAuthProvider,
   signInWithCredential,
-  RecaptchaVerifier,
   signOut 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import app, { db } from '../config/firebase';
 import { setUserData, setUserRole, clearUserData } from '../utils/storage';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+
+// Lazily initialize auth to avoid crash on app startup
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+  });
+} catch (e) {
+  // Auth already initialized, get existing instance
+  const { getAuth } = require('firebase/auth');
+  auth = getAuth(app);
+}
 
 // Simplified phone auth for React Native (without reCAPTCHA)
 // In production, use Firebase Admin SDK on backend for security
